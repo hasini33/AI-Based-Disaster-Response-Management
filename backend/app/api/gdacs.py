@@ -3,6 +3,7 @@ from app.db.database import SessionLocal
 from app.models import Disaster
 from fastapi import APIRouter,Depends
 import httpx
+from geoalchemy2.elements import WKTElement
 from app.services.zone_mapping_service import assign_disaster_to_zone
 from sqlalchemy.orm import Session
 from app.db.database import get_db
@@ -10,6 +11,27 @@ from app.db.database import get_db
 router = APIRouter()  # creates an obj for the endpoints
 
 GDACS_URL = "https://www.gdacs.org/xml/gdacs_archive.geojson"   #api url
+
+
+
+@router.get("/disasters")
+def get_disasters(db: Session = Depends(get_db)):
+    disasters = db.query(Disaster).all()
+
+    result = []
+
+    for disaster in disasters:
+        result.append({
+            "id": disaster.id,
+            "type": disaster.disaster_type,
+            "country": disaster.country,
+            "severity": disaster.severity,
+            "zone_id": disaster.zone_id
+        })
+
+    return result
+
+
 
 @router.post("/{disaster_id}/assign-zone")
 def assign_zone(
@@ -43,14 +65,21 @@ async def get_gdacs_data():
             alert_level=normalized["alert_level"],
             severity=normalized["severity"],
             latitude=normalized["latitude"],
-            longitude=normalized["longitude"]
+            longitude=normalized["longitude"],
+            location=WKTElement(
+            f"POINT({normalized['longitude']} {normalized['latitude']})",
+            srid=4326
+        )
         )
 
         db.add(new_disaster)
         db.commit()
         db.refresh(new_disaster)
 
-        assign_zone_to_disaster(db, new_disaster)
+        assign_disaster_to_zone(
+                    db,
+                    new_disaster.id
+                )
     db.close()
     return {
     "message": "Data inserted successfully!",

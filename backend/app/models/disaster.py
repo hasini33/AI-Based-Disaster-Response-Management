@@ -10,7 +10,7 @@ class Disaster(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    disaster_type = Column(String(20))
+    disaster_type = Column(String(255))
     country = Column(String(100))
     alert_level = Column(String(20))
     severity = Column(Float)
@@ -23,5 +23,5 @@ class Disaster(Base):
     zone_id = Column(Integer, ForeignKey("zones.id"), nullable=True)
     zone = relationship(
     "Zone",
-    foreign_keys=[zone_id]
+    back_populates="disasters"
 )

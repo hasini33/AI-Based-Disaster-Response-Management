@@ -34,7 +34,7 @@ def get_all_zones(db: Session):
             "id": zone.id,
             "zone_name": zone.zone_name,
             "geometry": to_shape(zone.geometry).wkt,
-            "disaster_id": zone.disaster_id,
+            "disaster_ids": [d.id for d in zone.disasters],
             "estimated_population": zone.estimated_population,
             "building_count": zone.building_count,
             "severity_score": zone.severity_score,
@@ -50,15 +50,16 @@ def get_zone_by_id(db: Session, zone_id: int):
         return None
 
     return {
-        "id": zone.id,
-        "zone_name": zone.zone_name,
-        "geometry": to_shape(zone.geometry).wkt,
-        "disaster_id": zone.disaster_id,
-        "estimated_population": zone.estimated_population,
-        "building_count": zone.building_count,
-        "severity_score": zone.severity_score,
-        "created_at": zone.created_at,
-    }
+    "id": zone.id,
+    "zone_name": zone.zone_name,
+    "geometry": to_shape(zone.geometry).wkt,
+    "disaster_ids": [d.id for d in zone.disasters],
+    "estimated_population": zone.estimated_population,
+    "building_count": zone.building_count,
+    "severity_score": zone.severity_score,
+    "created_at": zone.created_at,
+}
+
 
 def update_zone(db: Session, zone_id: int, zone: ZoneUpdate):
     db_zone = db.query(Zone).filter(Zone.id == zone_id).first()
@@ -73,7 +74,7 @@ def update_zone(db: Session, zone_id: int, zone: ZoneUpdate):
     "id": db_zone.id,
     "zone_name": db_zone.zone_name,
     "geometry": to_shape(db_zone.geometry).wkt,
-    "disaster_id": db_zone.disaster_id,
+    "disaster_ids": [d.id for d in db_zone.disasters],
     "estimated_population": db_zone.estimated_population,
     "building_count": db_zone.building_count,
     "severity_score": db_zone.severity_score,

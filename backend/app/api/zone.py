@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from app.services.resource_allocation_service import allocate_resources
+from app.models.zone import Zone
 from app.db.database import get_db
 from app.schemas.zone import ZoneCreate, ZoneUpdate, ZoneResponse
 from app.services.zone_service import (
@@ -59,3 +60,46 @@ def delete_existing_zone(zone_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Zone not found")
 
     return {"message": "Zone deleted successfully"}
+
+@router.get("/{zone_id}/summary")
+def zone_summary(
+    zone_id: int,
+    db: Session = Depends(get_db)
+):
+    zone = db.query(Zone).filter(Zone.id == zone_id).first()
+
+    if not zone:
+        return {"message": "Zone not found"}
+
+    return {
+        "zone_name": zone.zone_name,
+        "severity_score": zone.severity_score,
+        "disaster_count": zone.disaster_count,
+        "estimated_population": zone.estimated_population,
+        "building_count": zone.building_count
+    }
+
+
+@router.get("/{zone_id}/resources")
+def get_resources(
+    zone_id: int,
+    db: Session = Depends(get_db)
+):
+    zone = (
+        db.query(Zone)
+        .filter(Zone.id == zone_id)
+        .first()
+    )
+
+    if not zone:
+        return {
+            "message": "Zone not found"
+        }
+
+    resources = allocate_resources(zone)
+
+    return {
+        "zone_name": zone.zone_name,
+        "severity_score": zone.severity_score,
+        "resources": resources
+    }

@@ -8,3 +8,4 @@ from app.models.resource import Resource
 from .resource import Resource
 from app.models.severity import Severity
 from .zone import Zone
+from .field_operation import FieldOperation
