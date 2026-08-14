@@ -1,26 +1,99 @@
+# =========================
 # Python
-__pycache__/
-*.pyc
+# =========================
 
-# Virtual Environment
+backend/venv/
 venv/
 .venv/
+env/
 
-# Environment variables
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# Environment / Secrets
+# =========================
+
 .env
+.env.*
+!.env.example
 
+# =========================
+# Cache
+# =========================
 
-# Database
-*.sqlite3
+cache/
+backend/cache/
 
-# Node
+# =========================
+# ML generated files
+# =========================
+
+*.joblib
+*.pkl
+*.pickle
+
+# =========================
+# Frontend - Node / React / Vite
+# =========================
+
 node_modules/
+frontend/node_modules/
 
-# VS Code
-.vscode/
+dist/
+frontend/dist/
 
+.vite/
+frontend/.vite/
 
-# OS
+# =========================
+# Logs
+# =========================
+
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =========================
+# Testing / Tooling
+# =========================
+
+.pytest_cache/
+.mypy_cache/
+
+# =========================
+# Large datasets / raster files
+# =========================
+
+*.tif
+*.tiff
+
+# =========================
+# OS files
+# =========================
+
 .DS_Store
+Thumbs.db
 
-backend/data/*.tif
+# =========================
+# IDE
+# =========================
+
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# =========================
+# Build / local files
+# =========================
+
+dist-ssr/
+*.local

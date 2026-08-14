@@ -12,7 +12,7 @@ def update_building_count(
     building_count = (
         db.query(Building)
         .filter(
-            functions.ST_Contains(
+            functions.ST_Intersects(
                 zone.geometry,
                 Building.geometry
             )

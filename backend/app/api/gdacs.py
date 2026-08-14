@@ -22,18 +22,20 @@ def get_disasters(db: Session = Depends(get_db)):
 
     for disaster in disasters:
         result.append({
-            "id": disaster.id,
-            "type": disaster.disaster_type,
-            "country": disaster.country,
-            "severity": disaster.severity,
-            "zone_id": disaster.zone_id
-        })
+    "id": disaster.id,
+    "type": disaster.disaster_type,
+    "country": disaster.country,
+    "severity": disaster.severity,
+    "latitude": disaster.latitude,
+    "longitude": disaster.longitude,
+    "zone_id": disaster.zone_id
+})
 
     return result
 
 
 
-@router.post("/{disaster_id}/assign-zone")
+@router.post("/{disaster_id}/assign-zone")    # post api will allow u to create the resource which will modify the server
 def assign_zone(
     disaster_id: int,
     db: Session = Depends(get_db)
@@ -45,6 +47,8 @@ def assign_zone(
     )
 
     return result
+
+
 
 @router.get("/gdacs")
 async def get_gdacs_data():

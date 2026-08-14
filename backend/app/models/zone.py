@@ -33,6 +33,17 @@ class Zone(Base):
 
     severity_score = Column(Float, default=0.0)
 
+    damage_percent = Column(Float, default=0.0)
+
+    elderly_percent = Column(Float, default=0.0)
+
+    children_percent = Column(Float, default=0.0)
+
+    medically_dependent_percent = Column(
+        Float,
+        default=0.0
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now()

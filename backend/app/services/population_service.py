@@ -1,51 +1,89 @@
 import rasterio
-from rasterio.windows import Window
+import numpy as np
 
-
-def read_population_raster(file_path):
-    with rasterio.open(file_path) as dataset:
-        print("Raster CRS:", dataset.crs)
-        print("Raster Bounds:", dataset.bounds)
-        print("=" * 40)
-        print("Population Raster Information")
-        print("=" * 40)
-
-        print("Width :", dataset.width)
-        print("Height:", dataset.height)
-        print("Bands :", dataset.count)
-        print("CRS   :", dataset.crs)
-        print("Bounds:", dataset.bounds)
-
-        data = dataset.read(1)
-
-        print("\nPopulation Grid")
-        print(data)
-
-    return data
+from shapely.geometry import mapping
+from shapely.ops import transform
+from pyproj import Transformer
+from rasterio.mask import mask
 
 
 def get_population_at_location(latitude, longitude, file_path):
     """
-    Returns the population value at a given latitude and longitude
-    without loading the entire raster into memory.
+    Get population value at a single latitude/longitude.
+    Existing function used by Module 1.
     """
 
     with rasterio.open(file_path) as dataset:
 
-        # Convert latitude/longitude to raster row and column
         row, col = dataset.index(longitude, latitude)
 
-        # Check if the coordinates are inside the raster
         if (
             row < 0 or row >= dataset.height or
             col < 0 or col >= dataset.width
         ):
-            raise ValueError("Location is outside the raster bounds.")
+            raise ValueError(
+                "Location is outside the raster bounds."
+            )
 
-        # Read only one pixel
         population = dataset.read(
             1,
-            window=Window(col, row, 1, 1)
+            window=rasterio.windows.Window(
+                col, row, 1, 1
+            )
         )[0, 0]
 
         return float(population)
+
+
+def get_population_in_zone(zone_geometry, raster_path):
+    """
+    Calculate total population inside a zone polygon.
+    """
+
+    with rasterio.open(raster_path) as dataset:
+
+        zone_crs = "EPSG:4326"
+
+        if dataset.crs.to_string() != zone_crs:
+
+            transformer = Transformer.from_crs(
+                zone_crs,
+                dataset.crs,
+                always_xy=True
+            )
+
+            zone_geometry = transform(
+                transformer.transform,
+                zone_geometry
+            )
+
+        shapes = [mapping(zone_geometry)]
+
+        try:
+
+            image, _ = mask(
+                dataset,
+                shapes,
+                crop=True,
+                filled=True,
+                nodata=0
+            )
+
+        except ValueError:
+            return 0
+
+        population = image[0]
+
+        population = population[
+            np.isfinite(population)
+        ]
+
+        population = population[
+            population >= 0
+        ]
+
+        total_population = float(
+            population.sum()
+        )
+
+        return round(total_population)

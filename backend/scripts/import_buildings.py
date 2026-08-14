@@ -6,31 +6,55 @@ from geoalchemy2.shape import from_shape
 from app.db.database import SessionLocal
 from app.models.building import Building
 
-# Connect to database
+
 db = SessionLocal()
 
-# Delete old records
+
+# Delete old building records
 db.query(Building).delete()
 db.commit()
 
 print("Old building records deleted.")
 
-# Hyderabad coordinates
-latitude = 17.3850
-longitude = 78.4867
 
-# Download buildings
-buildings = ox.features_from_point(
-    (latitude, longitude),
-    tags={"building": True},
-    dist=2000
+# ---------------------------------------------------------
+# AREA COVERED BY ALL ZONES
+# ---------------------------------------------------------
+
+west = 78.40
+south = 17.30
+east = 78.80
+north = 17.40
+
+print("Downloading buildings for entire zone area...")
+print(f"West: {west}")
+print(f"East: {east}")
+print(f"South: {south}")
+print(f"North: {north}")
+
+
+# ---------------------------------------------------------
+# DOWNLOAD OSM BUILDINGS
+# ---------------------------------------------------------
+
+buildings = ox.features_from_bbox(
+    bbox=(west, south, east, north),
+    tags={"building": True}
 )
 
 print("Downloaded Buildings:", len(buildings))
 
+
+# ---------------------------------------------------------
+# INSERT INTO DATABASE
+# ---------------------------------------------------------
+
 count = 0
 
 for index, row in buildings.iterrows():
+
+    if row.geometry is None:
+        continue
 
     osm_id = f"{index[0]}_{index[1]}"
 
@@ -47,14 +71,15 @@ for index, row in buildings.iterrows():
     if pd.isna(amenity):
         amenity = None
 
-    #print(osm_id, building_type, amenity, name)
-
     building = Building(
         osm_id=osm_id,
         building_type=building_type,
         amenity=amenity,
         name=name,
-        geometry=from_shape(row.geometry, srid=4326)
+        geometry=from_shape(
+            row.geometry,
+            srid=4326
+        )
     )
 
     db.add(building)
@@ -67,7 +92,6 @@ for index, row in buildings.iterrows():
 
 
 db.commit()
-
 
 print(f"\nSuccessfully imported {count} buildings!")
 

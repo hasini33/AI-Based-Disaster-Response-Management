@@ -7,7 +7,7 @@ def calculate_severity(magnitude, population, buildings):
     """
 
     # Normalize values to 0-100
-    magnitude_score = magnitude * 10
+    magnitude_score = min(magnitude * 10, 100)
     population_score = min(population / 10, 100)
     building_score = min(buildings, 100)
 
