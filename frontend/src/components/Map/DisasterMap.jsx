@@ -68,11 +68,14 @@ function getSeverityColor(severity) {
 }
 
 
-function DisasterMap() {
+function DisasterMap({ selectedDisasterId: externalDisasterId }) {
 
   const [impactData, setImpactData] = useState(null)
   const [disasters, setDisasters] = useState([])
-  const [selectedDisasterId, setSelectedDisasterId] = useState(1500)
+
+  const [selectedDisasterId, setSelectedDisasterId] =
+    useState(externalDisasterId || 1500)
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
@@ -92,7 +95,13 @@ function DisasterMap() {
 
   }, [])
 
+useEffect(() => {
 
+  if (externalDisasterId) {
+    setSelectedDisasterId(externalDisasterId)
+  }
+
+}, [externalDisasterId])
   // Get selected disaster information
   useEffect(() => {
 
