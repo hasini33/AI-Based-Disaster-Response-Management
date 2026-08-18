@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from app.services.scenario_service import simulate_scenario
 from app.db.database import get_db
 from app.models.zone import Zone
 
@@ -103,3 +103,36 @@ def update_all_demands(
         "updated": len(results),
         "zones": results
     }
+@router.post("/{zone_id}/simulate")
+def scenario_demand(
+    zone_id: int,
+    damage_percent: float,
+    response_delay_days: int = 0,
+    resource_availability: float = 100,
+    db: Session = Depends(get_db)
+):
+
+    try:
+
+        result = simulate_scenario(
+            db,
+            zone_id,
+            damage_percent,
+            response_delay_days,
+            resource_availability
+        )
+
+        if result is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Zone not found"
+            )
+
+        return result
+
+    except ValueError as e:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )

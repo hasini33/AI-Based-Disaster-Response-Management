@@ -44,9 +44,7 @@ def predict_zone_demand(
     zone_id: int
 ):
 
-    # --------------------------------------------------
     # 1. Get zone
-    # --------------------------------------------------
 
     zone = (
         db.query(Zone)
@@ -57,10 +55,9 @@ def predict_zone_demand(
     if not zone:
         return None
 
-
-    # --------------------------------------------------
+  
     # 2. Get latest disaster in this zone
-    # --------------------------------------------------
+
 
     disaster = (
         db.query(Disaster)
@@ -96,31 +93,27 @@ def predict_zone_demand(
     )
 
 
-    # --------------------------------------------------
     # 4. Vulnerability
-    # --------------------------------------------------
 
     vulnerability_score = calculate_vulnerability_score(
         zone
     )
 
 
-    # --------------------------------------------------
-    # 5. Derived ML features
-    # --------------------------------------------------
+   # 5. Derived ML features
 
     affected_population = (
         population * damage_percent / 100
     )
 
     severity_damage_index = (
-        severity_score * damage_percent
-    )
+    severity_score * damage_percent / 100
+)
 
-    if buildings > 0:
+    if population > 0:
         building_damage_ratio = (
-            damage_percent / 100
-        )
+        buildings / population
+    )
     else:
         building_damage_ratio = 0
 
@@ -241,8 +234,31 @@ def predict_zone_demand(
                 )
             }
         }
+        # Vulnerability adjustment
+    vulnerability_multiplier = 1 + (
+        vulnerability_score / 100
+    )
+
+    for target in TARGETS:
+
+        predicted = predictions[target]["predicted"]
+
+        lower = predictions[target]["confidence_interval"]["lower"]
+        upper = predictions[target]["confidence_interval"]["upper"]
+
+        adjusted_prediction = predicted * vulnerability_multiplier
+        adjusted_lower = lower * vulnerability_multiplier
+        adjusted_upper = upper * vulnerability_multiplier
+
+        predictions[target] = {
+            "predicted": round(adjusted_prediction, 2),
+            "confidence_interval": {
+                "lower": round(adjusted_lower, 2),
+                "upper": round(adjusted_upper, 2)
+            }
+        }
     # 8. Return result
-    # 
+    
 
     return {
 
