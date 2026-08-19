@@ -7,15 +7,27 @@ import {
   Truck,
   BarChart3,
   Settings,
+  Activity,
 } from "lucide-react"
+
 import { NavLink } from "react-router-dom"
 
+
 function Sidebar() {
+
+  const navItemClass = ({ isActive }) =>
+    `w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
+      isActive
+        ? "bg-blue-600 text-white"
+        : "text-slate-300 hover:bg-slate-800"
+    }`
+
   return (
     <aside className="w-64 min-h-screen bg-slate-900 text-white flex flex-col">
 
       {/* Logo */}
       <div className="px-6 py-5 border-b border-slate-700">
+
         <h1 className="text-xl font-bold">
           Disaster AI
         </h1>
@@ -23,6 +35,7 @@ function Sidebar() {
         <p className="text-xs text-slate-400 mt-1">
           Response Management
         </p>
+
       </div>
 
 
@@ -33,75 +46,119 @@ function Sidebar() {
           Main Menu
         </p>
 
+
         <div className="space-y-2">
 
           {/* Dashboard */}
-          <button className="w-full flex items-center gap-3 px-3 py-3 rounded-lg bg-blue-600 text-white">
+          <NavLink
+            to="/"
+            end
+            className={navItemClass}
+          >
             <LayoutDashboard className="w-5 h-5" />
-            <span>Dashboard</span>
-          </button>
+
+            <span>
+              Dashboard
+            </span>
+          </NavLink>
 
 
           {/* Disasters */}
           <NavLink
-  to="/disasters"
-  className={({ isActive }) =>
-    `w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
-      isActive
-        ? "bg-blue-600 text-white"
-        : "text-slate-300 hover:bg-slate-800"
-    }`
-  }
->
-  <TriangleAlert className="w-5 h-5" />
-  <span>Disasters</span>
-</NavLink>
+            to="/disasters"
+            className={navItemClass}
+          >
+            <TriangleAlert className="w-5 h-5" />
+
+            <span>
+              Disasters
+            </span>
+          </NavLink>
+
 
           {/* Zones */}
-          <button className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors">
+          <NavLink
+            to="/zones"
+            className={navItemClass}
+          >
             <MapPinned className="w-5 h-5" />
-            <span>Zones</span>
-          </button>
+
+            <span>
+              Zones
+            </span>
+          </NavLink>
 
 
           {/* Resources */}
-          <button className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors">
+          
+          <NavLink
+            to="/resources"
+            className={navItemClass}
+          >
             <Package className="w-5 h-5" />
-            <span>Resources</span>
-          </button>
+
+            <span>
+              Resources
+            </span>
+          </NavLink>
 
 
           {/* AI Demand */}
-          <button className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors">
+          <NavLink
+            to="/AIdemand"
+            className={navItemClass}
+          >
             <Brain className="w-5 h-5" />
-            <span>AI Demand</span>
-          </button>
+
+            <span>
+              AI Demand
+            </span>
+          </NavLink>
 
 
           {/* Allocation */}
-          <button className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors">
+          <NavLink
+            to="/Operations"
+            className={navItemClass}
+          >
             <Truck className="w-5 h-5" />
-            <span>Allocation</span>
-          </button>
+
+            <span>
+              Allocation
+            </span>
+          </NavLink>
 
 
           {/* Reports */}
-          <button className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors">
+          <NavLink
+            to="/reports"
+            className={navItemClass}
+          >
             <BarChart3 className="w-5 h-5" />
-            <span>Reports</span>
-          </button>
+
+            <span>
+              Reports
+            </span>
+          </NavLink>
 
         </div>
+
       </nav>
 
 
       {/* Settings */}
       <div className="px-4 py-4 border-t border-slate-700">
 
-        <button className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors">
+        <NavLink
+          to="/settings"
+          className={navItemClass}
+        >
           <Settings className="w-5 h-5" />
-          <span>Settings</span>
-        </button>
+
+          <span>
+            Settings
+          </span>
+        </NavLink>
 
       </div>
 

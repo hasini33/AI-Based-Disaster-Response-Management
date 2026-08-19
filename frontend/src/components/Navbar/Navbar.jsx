@@ -1,3 +1,5 @@
+import ThemeToggle from "../Theme/ThemeToggle"
+
 function Navbar()
 {
     return (
@@ -5,10 +7,12 @@ function Navbar()
             <h1 className="text-x1 font-bold">
                 Disaster Response System
             </h1>
+            
             <div className="flex items-center gap-6">
                 <span>Alerts</span>
                 <span>Admin</span>
                 <span>Settings</span>
+                <ThemeToggle />
             </div>
         </nav>
     )

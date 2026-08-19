@@ -1,1 +1,24 @@
 @import "tailwindcss";
+
+/* Tell Tailwind that dark mode is controlled by .dark */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #f1f5f9;
+  color: #0f172a;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
+}
+
+.dark body {
+  background-color: #020617;
+  color: #f8fafc;
+}

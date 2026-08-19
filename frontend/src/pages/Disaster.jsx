@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+
 import {
   Search,
   Filter,
@@ -10,19 +11,26 @@ import {
   Activity,
   Hash,
 } from "lucide-react"
+
 import { useNavigate } from "react-router-dom"
+
 import {
   getDisasters,
   getDisasterImpact,
 } from "../services/disasterService"
 
+
 function Disasters() {
+
+  // ---------------------------------------------------
+  // State
+  // ---------------------------------------------------
 
   const [disasters, setDisasters] = useState([])
   const [selectedDisaster, setSelectedDisaster] = useState(null)
-  const [impactData, setImpactData] = useState(null)
+
   const [impactLoading, setImpactLoading] = useState(false)
-  const navigate = useNavigate()
+
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("All")
   const [severityFilter, setSeverityFilter] = useState("All")
@@ -30,26 +38,39 @@ function Disasters() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
+  const navigate = useNavigate()
+
+
+  // ---------------------------------------------------
+  // View Impact Area
+  // ---------------------------------------------------
+
   async function handleViewImpact() {
-  if (!selectedDisaster) return
 
-  try {
-    setImpactLoading(true)
+    if (!selectedDisaster) return
 
-    const data = await getDisasterImpact(selectedDisaster.id)
+    try {
 
-    console.log("Impact data:", data)
+      setImpactLoading(true)
 
-    setImpactData(data)
+      const data = await getDisasterImpact(selectedDisaster.id)
 
-    navigate(`/?disasterId=${selectedDisaster.id}`)
+      console.log("Impact data:", data)
 
-  } catch (error) {
-    console.error("Failed to fetch impact:", error)
-  } finally {
-    setImpactLoading(false)
+      navigate(`/?disasterId=${selectedDisaster.id}`)
+
+    } catch (error) {
+
+      console.error("Failed to fetch impact:", error)
+
+    } finally {
+
+      setImpactLoading(false)
+
+    }
   }
-}
+
+
   // ---------------------------------------------------
   // Get disasters from backend
   // ---------------------------------------------------
@@ -57,16 +78,27 @@ function Disasters() {
   useEffect(() => {
 
     getDisasters()
+
       .then((data) => {
+
         console.log("Disasters:", data)
+
         setDisasters(data)
+
       })
+
       .catch((error) => {
+
         console.error("Failed to fetch disasters:", error)
+
         setError(true)
+
       })
+
       .finally(() => {
+
         setLoading(false)
+
       })
 
   }, [])
@@ -78,6 +110,7 @@ function Disasters() {
 
   const disasterTypes = [
     "All",
+
     ...new Set(
       disasters
         .map((disaster) => disaster.type)
@@ -125,9 +158,11 @@ function Disasters() {
   // ---------------------------------------------------
 
   function clearFilters() {
+
     setSearchTerm("")
     setTypeFilter("All")
     setSeverityFilter("All")
+
   }
 
 
@@ -183,6 +218,7 @@ function Disasters() {
   if (loading) {
 
     return (
+
       <div className="flex items-center justify-center min-h-96">
 
         <div className="text-center">
@@ -196,6 +232,7 @@ function Disasters() {
         </div>
 
       </div>
+
     )
   }
 
@@ -207,6 +244,7 @@ function Disasters() {
   if (error) {
 
     return (
+
       <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
 
         <TriangleAlert className="w-8 h-8 text-red-500 mx-auto" />
@@ -220,6 +258,7 @@ function Disasters() {
         </p>
 
       </div>
+
     )
   }
 
@@ -231,6 +270,7 @@ function Disasters() {
   return (
 
     <div className="space-y-6">
+
 
       {/* ============================================= */}
       {/* PAGE HEADER */}
@@ -245,168 +285,6 @@ function Disasters() {
         <p className="mt-2 text-gray-600">
           Monitor and explore reported disaster events.
         </p>
-        {/* Disaster Details Panel */}
-{selectedDisaster && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-
-    <div className="bg-white w-full max-w-lg rounded-xl shadow-xl">
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            Disaster Details
-          </h2>
-
-          <p className="text-sm text-gray-500 mt-1">
-            Information about this disaster event
-          </p>
-        </div>
-
-        <button
-          onClick={() => setSelectedDisaster(null)}
-          className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-      </div>
-
-
-      {/* Details */}
-      <div className="p-6 space-y-5">
-
-        {/* Disaster Type */}
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase">
-            Disaster Type
-          </p>
-
-          <p className="text-lg font-semibold text-gray-900 mt-1">
-            {selectedDisaster.type || "Unknown"}
-          </p>
-        </div>
-
-
-        {/* Country */}
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase">
-            Country
-          </p>
-
-          <p className="text-sm text-gray-700 mt-1">
-            {selectedDisaster.country || "—"}
-          </p>
-        </div>
-
-
-        {/* Location */}
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase">
-            Location
-          </p>
-
-          <p className="text-sm text-gray-700 mt-1">
-            {selectedDisaster.location || "—"}
-          </p>
-        </div>
-
-
-        {/* Severity */}
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase">
-            Severity
-          </p>
-
-          {selectedDisaster.severity != null ? (
-            <span
-              className={`inline-flex mt-2 px-3 py-1 rounded-full text-xs font-semibold ${
-                selectedDisaster.severity >= 8
-                  ? "bg-red-100 text-red-700"
-                  : selectedDisaster.severity >= 6
-                  ? "bg-orange-100 text-orange-700"
-                  : selectedDisaster.severity >= 4
-                  ? "bg-yellow-100 text-yellow-700"
-                  : "bg-green-100 text-green-700"
-              }`}
-            >
-              {selectedDisaster.severity >= 8
-                ? "Critical"
-                : selectedDisaster.severity >= 6
-                ? "High"
-                : selectedDisaster.severity >= 4
-                ? "Medium"
-                : "Low"}
-            </span>
-          ) : (
-            <p className="text-sm text-gray-400 mt-1">
-              Not available
-            </p>
-          )}
-        </div>
-
-
-        {/* Coordinates */}
-        <div className="grid grid-cols-2 gap-4">
-
-          <div>
-            <p className="text-xs font-medium text-gray-500 uppercase">
-              Latitude
-            </p>
-
-            <p className="text-sm text-gray-700 mt-1">
-              {selectedDisaster.latitude ?? "—"}
-            </p>
-          </div>
-
-
-          <div>
-            <p className="text-xs font-medium text-gray-500 uppercase">
-              Longitude
-            </p>
-
-            <p className="text-sm text-gray-700 mt-1">
-              {selectedDisaster.longitude ?? "—"}
-            </p>
-          </div>
-
-        </div>
-
-
-        {/* Alert Level */}
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase">
-            Alert Level
-          </p>
-
-          <p className="text-sm text-gray-700 mt-1">
-            {selectedDisaster.alert_level || "—"}
-          </p>
-        </div>
-
-{/* View Impact Area */}
-<button
-  onClick={handleViewImpact}
-  disabled={impactLoading}
-  className="w-full border border-blue-600 text-blue-600 py-2.5 rounded-lg font-medium hover:bg-blue-50 transition-colors"
->
-  {impactLoading ? "Loading impact..." : "View Impact Area"}
-</button>
-        {/* Close */}
-        <button
-          onClick={() => setSelectedDisaster(null)}
-          className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-        >
-          Close
-        </button>
-
-      </div>
-
-    </div>
-
-  </div>
-)}
 
       </div>
 
@@ -432,6 +310,7 @@ function Disasters() {
 
 
           {/* Search */}
+
           <div className="relative">
 
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -447,7 +326,8 @@ function Disasters() {
           </div>
 
 
-          {/* Type */}
+          {/* Type Filter */}
+
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
@@ -456,7 +336,10 @@ function Disasters() {
 
             {disasterTypes.map((type) => (
 
-              <option key={type} value={type}>
+              <option
+                key={type}
+                value={type}
+              >
 
                 {type === "All"
                   ? "All Disaster Types"
@@ -469,7 +352,8 @@ function Disasters() {
           </select>
 
 
-          {/* Severity */}
+          {/* Severity Filter */}
+
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
@@ -501,7 +385,7 @@ function Disasters() {
         </div>
 
 
-        {/* Clear filters */}
+        {/* Clear Filters */}
 
         {(searchTerm ||
           typeFilter !== "All" ||
@@ -591,6 +475,7 @@ function Disasters() {
                     className="hover:bg-gray-50 transition-colors"
                   >
 
+
                     {/* Type */}
 
                     <td className="px-5 py-4">
@@ -637,19 +522,25 @@ function Disasters() {
                       <span
                         className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${getSeverityStyle(disaster.severity)}`}
                       >
+
                         {getSeverityLabel(disaster.severity)}
+
                       </span>
 
                     </td>
 
 
-                    {/* View */}
+                    {/* Action */}
 
                     <td className="px-5 py-4">
 
                       <button
                         onClick={() => {
-                          console.log("Selected disaster:", disaster)
+                          console.log(
+                            "Selected disaster:",
+                            disaster
+                          )
+
                           setSelectedDisaster(disaster)
                         }}
                         className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800"
@@ -705,209 +596,277 @@ function Disasters() {
 
 
       {/* ============================================= */}
-      {/* SELECTED DISASTER DETAILS */}
+      {/* DISASTER DETAILS MODAL */}
       {/* ============================================= */}
 
       {selectedDisaster && (
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+
+          <div className="bg-white w-full max-w-lg rounded-xl shadow-xl max-h-[90vh] overflow-y-auto">
 
 
-          {/* Details Header */}
+            {/* Modal Header */}
 
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-
-            <div>
-
-              <h2 className="text-lg font-semibold text-gray-900">
-                Disaster Details
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-1">
-                Information about the selected disaster
-              </p>
-
-            </div>
-
-
-            <button
-              onClick={() => setSelectedDisaster(disaster)}
-              className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
-            >
-
-              <X className="w-5 h-5" />
-
-            </button>
-
-          </div>
-
-
-          {/* Details Content */}
-
-          <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-
-
-            {/* Disaster Type */}
-
-            <div className="flex items-start gap-3">
-
-              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-
-                <TriangleAlert className="w-4 h-4 text-blue-600" />
-
-              </div>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
 
               <div>
 
-                <p className="text-xs text-gray-500">
-                  Disaster Type
-                </p>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Disaster Details
+                </h2>
 
-                <p className="text-sm font-semibold text-gray-900 mt-1">
-                  {selectedDisaster.type || "Not available"}
+                <p className="text-sm text-gray-500 mt-1">
+                  Information about this disaster event
                 </p>
 
               </div>
+
+
+              <button
+                onClick={() => setSelectedDisaster(null)}
+                className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+
+                <X className="w-5 h-5" />
+
+              </button>
 
             </div>
 
 
-            {/* Country */}
+            {/* Modal Details */}
 
-            <div className="flex items-start gap-3">
+            <div className="p-6 space-y-5">
 
-              <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
 
-                <Globe className="w-4 h-4 text-gray-500" />
+              {/* Disaster Type */}
+
+              <div className="flex items-start gap-3">
+
+                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+
+                  <TriangleAlert className="w-5 h-5 text-blue-600" />
+
+                </div>
+
+                <div>
+
+                  <p className="text-xs font-medium text-gray-500 uppercase">
+                    Disaster Type
+                  </p>
+
+                  <p className="text-lg font-semibold text-gray-900 mt-1">
+                    {selectedDisaster.type || "Unknown"}
+                  </p>
+
+                </div>
 
               </div>
 
-              <div>
 
-                <p className="text-xs text-gray-500">
-                  Country / Region
-                </p>
+              {/* Country */}
 
-                <p className="text-sm font-semibold text-gray-900 mt-1">
-                  {selectedDisaster.country || "Not available"}
-                </p>
+              <div className="flex items-start gap-3">
+
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+
+                  <Globe className="w-5 h-5 text-gray-500" />
+
+                </div>
+
+                <div>
+
+                  <p className="text-xs font-medium text-gray-500 uppercase">
+                    Country
+                  </p>
+
+                  <p className="text-sm text-gray-700 mt-1">
+                    {selectedDisaster.country || "—"}
+                  </p>
+
+                </div>
 
               </div>
+
+
+              {/* Location */}
+
+              <div className="flex items-start gap-3">
+
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+
+                  <MapPin className="w-5 h-5 text-gray-500" />
+
+                </div>
+
+                <div>
+
+                  <p className="text-xs font-medium text-gray-500 uppercase">
+                    Location
+                  </p>
+
+                  <p className="text-sm text-gray-700 mt-1">
+                    {selectedDisaster.location || "—"}
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              {/* Severity */}
+
+              <div className="flex items-start gap-3">
+
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+
+                  <Activity className="w-5 h-5 text-gray-500" />
+
+                </div>
+
+                <div>
+
+                  <p className="text-xs font-medium text-gray-500 uppercase">
+                    Severity
+                  </p>
+
+                  {selectedDisaster.severity != null ? (
+
+                    <span
+                      className={`inline-flex mt-2 px-3 py-1 rounded-full text-xs font-semibold ${getSeverityStyle(
+                        selectedDisaster.severity
+                      )}`}
+                    >
+
+                      {getSeverityLabel(
+                        selectedDisaster.severity
+                      )}
+
+                    </span>
+
+                  ) : (
+
+                    <p className="text-sm text-gray-400 mt-1">
+                      Not available
+                    </p>
+
+                  )}
+
+                </div>
+
+              </div>
+
+
+              {/* Coordinates */}
+
+              <div className="grid grid-cols-2 gap-4">
+
+                <div>
+
+                  <p className="text-xs font-medium text-gray-500 uppercase">
+                    Latitude
+                  </p>
+
+                  <p className="text-sm text-gray-700 mt-1">
+                    {selectedDisaster.latitude ?? "—"}
+                  </p>
+
+                </div>
+
+
+                <div>
+
+                  <p className="text-xs font-medium text-gray-500 uppercase">
+                    Longitude
+                  </p>
+
+                  <p className="text-sm text-gray-700 mt-1">
+                    {selectedDisaster.longitude ?? "—"}
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              {/* Alert Level */}
+
+              <div className="flex items-start gap-3">
+
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+
+                  <Activity className="w-5 h-5 text-gray-500" />
+
+                </div>
+
+                <div>
+
+                  <p className="text-xs font-medium text-gray-500 uppercase">
+                    Alert Level
+                  </p>
+
+                  <p className="text-sm text-gray-700 mt-1">
+                    {selectedDisaster.alert_level || "—"}
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              {/* Disaster ID */}
+
+              <div className="flex items-start gap-3">
+
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+
+                  <Hash className="w-5 h-5 text-gray-500" />
+
+                </div>
+
+                <div>
+
+                  <p className="text-xs font-medium text-gray-500 uppercase">
+                    Disaster ID
+                  </p>
+
+                  <p className="text-sm text-gray-700 mt-1">
+                    {selectedDisaster.id}
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              {/* View Impact Area */}
+
+              <button
+                onClick={handleViewImpact}
+                disabled={impactLoading}
+                className="w-full border border-blue-600 text-blue-600 py-2.5 rounded-lg font-medium hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+
+                {impactLoading
+                  ? "Loading impact..."
+                  : "View Impact Area"}
+
+              </button>
+
+
+              {/* Close */}
+
+              <button
+                onClick={() => setSelectedDisaster(null)}
+                className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+              >
+
+                Close
+
+              </button>
 
             </div>
-
-
-            {/* Severity */}
-
-            <div className="flex items-start gap-3">
-
-              <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-
-                <Activity className="w-4 h-4 text-gray-500" />
-
-              </div>
-
-              <div>
-
-                <p className="text-xs text-gray-500">
-                  Severity
-                </p>
-
-                <span
-                  className={`inline-flex mt-1 px-2.5 py-1 rounded-full text-xs font-semibold ${getSeverityStyle(selectedDisaster.severity)}`}
-                >
-                  {getSeverityLabel(selectedDisaster.severity)}
-                </span>
-
-              </div>
-
-            </div>
-
-
-            {/* Disaster ID */}
-
-            <div className="flex items-start gap-3">
-
-              <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-
-                <Hash className="w-4 h-4 text-gray-500" />
-
-              </div>
-
-              <div>
-
-                <p className="text-xs text-gray-500">
-                  Disaster ID
-                </p>
-
-                <p className="text-sm font-semibold text-gray-900 mt-1">
-                  {selectedDisaster.id}
-                </p>
-
-              </div>
-
-            </div>
-
-
-            {/* Latitude */}
-
-            <div className="flex items-start gap-3">
-
-              <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-
-                <MapPin className="w-4 h-4 text-gray-500" />
-
-              </div>
-
-              <div>
-
-                <p className="text-xs text-gray-500">
-                  Latitude
-                </p>
-
-                <p className="text-sm font-semibold text-gray-900 mt-1">
-                  {selectedDisaster.latitude ?? "Not available"}
-                </p>
-
-              </div>
-
-            </div>
-
-
-            {/* Longitude */}
-
-            <div className="flex items-start gap-3">
-
-              <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-
-                <MapPin className="w-4 h-4 text-gray-500" />
-
-              </div>
-
-              <div>
-
-                <p className="text-xs text-gray-500">
-                  Longitude
-                </p>
-
-                <p className="text-sm font-semibold text-gray-900 mt-1">
-                  {selectedDisaster.longitude ?? "Not available"}
-                </p>
-
-              </div>
-
-            </div>
-
-          </div>
-
-
-          {/* Footer */}
-
-          <div className="px-5 py-4 bg-gray-50 border-t border-gray-200">
-
-            <p className="text-xs text-gray-500">
-              Select another disaster from the table to view its details.
-            </p>
 
           </div>
 
@@ -916,7 +875,9 @@ function Disasters() {
       )}
 
     </div>
+
   )
 }
+
 
 export default Disasters
