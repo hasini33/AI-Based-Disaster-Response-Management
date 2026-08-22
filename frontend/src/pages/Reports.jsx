@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+
 import {
   FileBarChart,
   Download,
@@ -14,43 +15,68 @@ import {
 
 import { getDisasters } from "../services/disasterService"
 
+
 function Reports() {
+
   const [disasters, setDisasters] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedPeriod, setSelectedPeriod] = useState("All")
 
-  // =========================================
+
+  // =========================================================
   // LOAD DISASTER DATA
-  // =========================================
+  // =========================================================
 
   useEffect(() => {
+
     async function loadReports() {
+
       try {
+
         const data = await getDisasters()
 
         console.log("Report data:", data)
 
-        setDisasters(Array.isArray(data) ? data : [])
+        setDisasters(
+          Array.isArray(data)
+            ? data
+            : []
+        )
+
       } catch (error) {
-        console.error("Failed to load report data:", error)
+
+        console.error(
+          "Failed to load report data:",
+          error
+        )
+
       } finally {
+
         setLoading(false)
+
       }
+
     }
 
     loadReports()
+
   }, [])
 
-  // =========================================
+
+  // =========================================================
   // REPORT CALCULATIONS
-  // =========================================
+  // =========================================================
 
   const reportData = useMemo(() => {
+
     const total = disasters.length
 
+
     const critical = disasters.filter(
-      (d) => Number(d.severity) >= 8
+      (d) =>
+        Number(d.severity) >= 8
     ).length
+
 
     const high = disasters.filter(
       (d) =>
@@ -58,11 +84,13 @@ function Reports() {
         Number(d.severity) < 8
     ).length
 
+
     const medium = disasters.filter(
       (d) =>
         Number(d.severity) >= 4 &&
         Number(d.severity) < 6
     ).length
+
 
     const low = disasters.filter(
       (d) =>
@@ -70,32 +98,44 @@ function Reports() {
         Number(d.severity) < 4
     ).length
 
+
     const rated = disasters.filter(
-      (d) => Number(d.severity) > 0
+      (d) =>
+        Number(d.severity) > 0
     )
+
 
     const averageSeverity =
       rated.length > 0
         ? (
             rated.reduce(
-              (sum, d) => sum + Number(d.severity),
+              (sum, d) =>
+                sum + Number(d.severity),
               0
             ) / rated.length
           ).toFixed(1)
         : "0.0"
 
+
     const types = {}
 
-    disasters.forEach((disaster) => {
-      const type = disaster.type || "Unknown"
 
-      types[type] = (types[type] || 0) + 1
+    disasters.forEach((disaster) => {
+
+      const type =
+        disaster.type || "Unknown"
+
+      types[type] =
+        (types[type] || 0) + 1
+
     })
+
 
     const topDisasterType =
       Object.entries(types).sort(
         (a, b) => b[1] - a[1]
       )[0] || ["No data", 0]
+
 
     return {
       total,
@@ -106,14 +146,20 @@ function Reports() {
       averageSeverity,
       topDisasterType,
     }
+
   }, [disasters])
 
-  // =========================================
-  // CSV REPORT DOWNLOAD
-  // =========================================
+
+  // =========================================================
+  // DOWNLOAD CSV REPORT
+  // =========================================================
 
   function downloadReport() {
-    if (!disasters.length) return
+
+    if (!disasters.length) {
+      return
+    }
+
 
     const headers = [
       "Disaster ID",
@@ -126,39 +172,61 @@ function Reports() {
       "Longitude",
     ]
 
-    const rows = disasters.map((disaster) => [
-      disaster.id ?? "",
-      disaster.type ?? "",
-      disaster.country ?? "",
-      disaster.location ?? "",
-      disaster.severity ?? "",
-      disaster.alert_level ?? "",
-      disaster.latitude ?? "",
-      disaster.longitude ?? "",
-    ])
+
+    const rows =
+      disasters.map((disaster) => [
+
+        disaster.id ?? "",
+        disaster.type ?? "",
+        disaster.country ?? "",
+        disaster.location ?? "",
+        disaster.severity ?? "",
+        disaster.alert_level ?? "",
+        disaster.latitude ?? "",
+        disaster.longitude ?? "",
+
+      ])
+
 
     const csvContent = [
+
       headers.join(","),
+
       ...rows.map((row) =>
         row
           .map((value) =>
-            `"${String(value).replace(/"/g, '""')}"`
+            `"${String(value).replace(
+              /"/g,
+              '""'
+            )}"`
           )
           .join(",")
       ),
+
     ].join("\n")
+
 
     const blob = new Blob(
       [csvContent],
-      { type: "text/csv;charset=utf-8;" }
+      {
+        type: "text/csv;charset=utf-8;",
+      }
     )
 
-    const url = URL.createObjectURL(blob)
 
-    const link = document.createElement("a")
+    const url =
+      URL.createObjectURL(blob)
+
+
+    const link =
+      document.createElement("a")
+
 
     link.href = url
-    link.download = "disaster-response-report.csv"
+
+    link.download =
+      "disaster-response-report.csv"
+
 
     document.body.appendChild(link)
 
@@ -167,73 +235,175 @@ function Reports() {
     document.body.removeChild(link)
 
     URL.revokeObjectURL(url)
+
   }
 
-  // =========================================
+
+  // =========================================================
   // LOADING
-  // =========================================
+  // =========================================================
 
   if (loading) {
+
     return (
-      <div className="min-h-96 flex items-center justify-center">
+
+      <div className="
+        min-h-96
+        flex
+        items-center
+        justify-center
+        bg-sky-50
+        dark:bg-slate-950
+        rounded-xl
+      ">
+
         <div className="text-center">
 
-          <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
+          <RefreshCw
+            className="
+              w-8
+              h-8
+              text-blue-600
+              dark:text-blue-400
+              animate-spin
+              mx-auto
+            "
+          />
 
-          <p className="mt-3 text-sm text-gray-500">
+          <p className="
+            mt-3
+            text-sm
+            text-slate-500
+            dark:text-slate-400
+          ">
+
             Preparing response reports...
+
           </p>
 
         </div>
+
       </div>
+
     )
+
   }
 
-  // =========================================
+
+  // =========================================================
   // MAIN UI
-  // =========================================
+  // =========================================================
 
   return (
-    <div className="space-y-6">
 
-      {/* ===================================== */}
-      {/* HEADER */}
-      {/* ===================================== */}
+    <div className="
+      space-y-6
+      text-slate-900
+      dark:text-slate-100
+    ">
 
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
+
+      <div className="
+        flex
+        flex-col
+        lg:flex-row
+        lg:items-center
+        lg:justify-between
+        gap-4
+      ">
+
+
+        {/* TITLE */}
 
         <div>
 
-          <div className="flex items-center gap-2 text-blue-600 mb-2">
+          <div className="
+            flex
+            items-center
+            gap-2
+            text-blue-600
+            dark:text-blue-400
+            mb-2
+          ">
 
             <FileBarChart className="w-5 h-5" />
 
-            <span className="text-sm font-medium">
+            <span className="text-sm font-semibold">
+
               Response Intelligence
+
             </span>
 
           </div>
 
-          <h1 className="text-3xl font-bold text-gray-900">
+
+          <h1 className="
+            text-3xl
+            font-bold
+            text-slate-900
+            dark:text-white
+          ">
+
             Reports & Insights
+
           </h1>
 
-          <p className="mt-2 text-gray-600">
-            Analyze disaster activity, severity patterns and
-            response priorities.
+
+          <p className="
+            mt-2
+            text-slate-600
+            dark:text-slate-400
+          ">
+
+            Analyze disaster activity, severity patterns
+            and response priorities.
+
           </p>
 
         </div>
 
-        <div className="flex items-center gap-3">
+
+        {/* CONTROLS */}
+
+        <div className="
+          flex
+          items-center
+          gap-3
+          flex-wrap
+        ">
+
+
+          {/* PERIOD */}
 
           <select
             value={selectedPeriod}
             onChange={(e) =>
-              setSelectedPeriod(e.target.value)
+              setSelectedPeriod(
+                e.target.value
+              )
             }
-            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
+            className="
+              border
+              border-blue-200
+              dark:border-slate-700
+              bg-blue-50
+              dark:bg-slate-900
+              text-slate-900
+              dark:text-slate-100
+              rounded-lg
+              px-4
+              py-2.5
+              text-sm
+              focus:outline-none
+              focus:ring-2
+              focus:ring-blue-500
+            "
           >
+
             <option value="All">
               All Records
             </option>
@@ -241,25 +411,35 @@ function Reports() {
             <option value="Current">
               Current Events
             </option>
+
           </select>
+
+
+          {/* EXPORT */}
 
           <button
             onClick={downloadReport}
             className="
-              inline-flex items-center gap-2
+              inline-flex
+              items-center
+              gap-2
               bg-blue-600
+              hover:bg-blue-700
               text-white
-              px-4 py-2.5
+              px-4
+              py-2.5
               rounded-lg
               text-sm
-              font-medium
-              hover:bg-blue-700
+              font-semibold
               transition
+              shadow-sm
             "
           >
+
             <Download className="w-4 h-4" />
 
             Export CSV
+
           </button>
 
         </div>
@@ -267,166 +447,216 @@ function Reports() {
       </div>
 
 
-      {/* ===================================== */}
-      {/* SUMMARY CARDS */}
-      {/* ===================================== */}
+      {/* =====================================================
+          SUMMARY CARDS
+      ===================================================== */}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-
-        {/* Total */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-
-          <div className="flex items-start justify-between">
-
-            <div>
-
-              <p className="text-sm text-gray-500">
-                Total Events
-              </p>
-
-              <p className="text-3xl font-bold text-gray-900 mt-2">
-                {reportData.total}
-              </p>
-
-            </div>
-
-            <div className="w-11 h-11 rounded-lg bg-blue-50 flex items-center justify-center">
-
-              <Activity className="w-5 h-5 text-blue-600" />
-
-            </div>
-
-          </div>
-
-          <p className="text-xs text-blue-600 mt-4">
-            Recorded disaster events
-          </p>
-
-        </div>
+      <div className="
+        grid
+        grid-cols-1
+        md:grid-cols-2
+        xl:grid-cols-4
+        gap-5
+      ">
 
 
-        {/* Critical */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        {/* TOTAL EVENTS */}
 
-          <div className="flex items-start justify-between">
-
-            <div>
-
-              <p className="text-sm text-gray-500">
-                Critical Events
-              </p>
-
-              <p className="text-3xl font-bold text-gray-900 mt-2">
-                {reportData.critical}
-              </p>
-
-            </div>
-
-            <div className="w-11 h-11 rounded-lg bg-red-50 flex items-center justify-center">
-
-              <TriangleAlert className="w-5 h-5 text-red-600" />
-
-            </div>
-
-          </div>
-
-          <p className="text-xs text-red-600 mt-4">
-            Requires immediate attention
-          </p>
-
-        </div>
+        <SummaryCard
+          label="Total Events"
+          value={reportData.total}
+          description="Recorded disaster events"
+          icon={
+            <Activity
+              className="
+                w-5
+                h-5
+                text-blue-600
+                dark:text-blue-400
+              "
+            />
+          }
+          iconBg="
+            bg-blue-100
+            dark:bg-blue-950
+          "
+          descriptionColor="
+            text-blue-600
+            dark:text-blue-400
+          "
+        />
 
 
-        {/* Average severity */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        {/* CRITICAL EVENTS */}
 
-          <div className="flex items-start justify-between">
-
-            <div>
-
-              <p className="text-sm text-gray-500">
-                Average Severity
-              </p>
-
-              <p className="text-3xl font-bold text-gray-900 mt-2">
-                {reportData.averageSeverity}
-                <span className="text-sm text-gray-400 ml-1">
-                  / 10
-                </span>
-              </p>
-
-            </div>
-
-            <div className="w-11 h-11 rounded-lg bg-orange-50 flex items-center justify-center">
-
-              <TrendingUp className="w-5 h-5 text-orange-600" />
-
-            </div>
-
-          </div>
-
-          <p className="text-xs text-orange-600 mt-4">
-            Across rated disasters
-          </p>
-
-        </div>
+        <SummaryCard
+          label="Critical Events"
+          value={reportData.critical}
+          description="Requires immediate attention"
+          icon={
+            <TriangleAlert
+              className="
+                w-5
+                h-5
+                text-red-600
+                dark:text-red-400
+              "
+            />
+          }
+          iconBg="
+            bg-red-100
+            dark:bg-red-950/50
+          "
+          descriptionColor="
+            text-red-600
+            dark:text-red-400
+          "
+        />
 
 
-        {/* Most common */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        {/* AVERAGE SEVERITY */}
 
-          <div className="flex items-start justify-between">
+        <SummaryCard
+          label="Average Severity"
+          value={
+            <>
+              {reportData.averageSeverity}
 
-            <div>
+              <span className="
+                text-sm
+                text-slate-400
+                dark:text-slate-500
+                ml-1
+              ">
 
-              <p className="text-sm text-gray-500">
-                Most Reported Type
-              </p>
+                / 10
 
-              <p className="text-xl font-bold text-gray-900 mt-3">
-                {reportData.topDisasterType[0]}
-              </p>
+              </span>
+            </>
+          }
+          description="Across rated disasters"
+          icon={
+            <TrendingUp
+              className="
+                w-5
+                h-5
+                text-orange-600
+                dark:text-orange-400
+              "
+            />
+          }
+          iconBg="
+            bg-orange-100
+            dark:bg-orange-950/50
+          "
+          descriptionColor="
+            text-orange-600
+            dark:text-orange-400
+          "
+        />
 
-            </div>
 
-            <div className="w-11 h-11 rounded-lg bg-green-50 flex items-center justify-center">
+        {/* MOST COMMON */}
 
-              <ShieldAlert className="w-5 h-5 text-green-600" />
-
-            </div>
-
-          </div>
-
-          <p className="text-xs text-green-600 mt-4">
-            {reportData.topDisasterType[1]} recorded events
-          </p>
-
-        </div>
+        <SummaryCard
+          label="Most Reported Type"
+          value={
+            reportData.topDisasterType[0]
+          }
+          description={`
+            ${reportData.topDisasterType[1]}
+            recorded events
+          `}
+          icon={
+            <ShieldAlert
+              className="
+                w-5
+                h-5
+                text-green-600
+                dark:text-green-400
+              "
+            />
+          }
+          iconBg="
+            bg-green-100
+            dark:bg-green-950/50
+          "
+          descriptionColor="
+            text-green-600
+            dark:text-green-400
+          "
+        />
 
       </div>
 
 
-      {/* ===================================== */}
-      {/* SEVERITY OVERVIEW */}
-      {/* ===================================== */}
+      {/* =====================================================
+          SEVERITY + SNAPSHOT
+      ===================================================== */}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="
+        grid
+        grid-cols-1
+        lg:grid-cols-3
+        gap-6
+      ">
 
-        {/* Severity Distribution */}
 
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm">
+        {/* ===================================================
+            SEVERITY DISTRIBUTION
+        =================================================== */}
 
-          <div className="px-5 py-4 border-b border-gray-200">
+        <div className="
+          lg:col-span-2
+          bg-blue-50
+          dark:bg-slate-900
+          rounded-xl
+          border
+          border-blue-200
+          dark:border-slate-800
+          shadow-sm
+          overflow-hidden
+        ">
 
-            <h2 className="text-lg font-semibold text-gray-900">
+
+          {/* HEADER */}
+
+          <div className="
+            px-5
+            py-4
+            border-b
+            border-blue-200
+            dark:border-slate-800
+          ">
+
+            <h2 className="
+              text-lg
+              font-semibold
+              text-slate-900
+              dark:text-white
+            ">
+
               Severity Distribution
+
             </h2>
 
-            <p className="text-sm text-gray-500 mt-1">
-              Breakdown of reported disaster severity levels.
+
+            <p className="
+              text-sm
+              text-slate-500
+              dark:text-slate-400
+              mt-1
+            ">
+
+              Breakdown of reported disaster
+              severity levels.
+
             </p>
 
           </div>
+
+
+          {/* BARS */}
 
           <div className="p-5 space-y-5">
 
@@ -435,31 +665,46 @@ function Reports() {
               value={reportData.critical}
               total={reportData.total}
               color="bg-red-500"
-              textColor="text-red-600"
+              textColor="
+                text-red-600
+                dark:text-red-400
+              "
             />
+
 
             <SeverityBar
               label="High"
               value={reportData.high}
               total={reportData.total}
               color="bg-orange-500"
-              textColor="text-orange-600"
+              textColor="
+                text-orange-600
+                dark:text-orange-400
+              "
             />
+
 
             <SeverityBar
               label="Medium"
               value={reportData.medium}
               total={reportData.total}
               color="bg-yellow-500"
-              textColor="text-yellow-600"
+              textColor="
+                text-yellow-600
+                dark:text-yellow-400
+              "
             />
+
 
             <SeverityBar
               label="Low"
               value={reportData.low}
               total={reportData.total}
               color="bg-green-500"
-              textColor="text-green-600"
+              textColor="
+                text-green-600
+                dark:text-green-400
+              "
             />
 
           </div>
@@ -467,47 +712,127 @@ function Reports() {
         </div>
 
 
-        {/* Response Snapshot */}
+        {/* ===================================================
+            RESPONSE SNAPSHOT
+        =================================================== */}
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="
+          bg-blue-50
+          dark:bg-slate-900
+          rounded-xl
+          border
+          border-blue-200
+          dark:border-slate-800
+          shadow-sm
+          overflow-hidden
+        ">
 
-          <div className="px-5 py-4 border-b border-gray-200">
 
-            <h2 className="text-lg font-semibold text-gray-900">
+          {/* HEADER */}
+
+          <div className="
+            px-5
+            py-4
+            border-b
+            border-blue-200
+            dark:border-slate-800
+          ">
+
+            <h2 className="
+              text-lg
+              font-semibold
+              text-slate-900
+              dark:text-white
+            ">
+
               Response Snapshot
+
             </h2>
 
-            <p className="text-sm text-gray-500 mt-1">
+
+            <p className="
+              text-sm
+              text-slate-500
+              dark:text-slate-400
+              mt-1
+            ">
+
               Current system indicators.
+
             </p>
 
           </div>
 
+
+          {/* METRICS */}
+
           <div className="p-5 space-y-4">
 
             <ReportMetric
-              icon={<Users className="w-5 h-5 text-blue-600" />}
+              icon={
+                <Users
+                  className="
+                    w-5
+                    h-5
+                    text-blue-600
+                    dark:text-blue-400
+                  "
+                />
+              }
               label="Affected Population"
               value="24,580"
               description="Estimated people"
             />
 
+
             <ReportMetric
-              icon={<Package className="w-5 h-5 text-green-600" />}
+              icon={
+                <Package
+                  className="
+                    w-5
+                    h-5
+                    text-green-600
+                    dark:text-green-400
+                  "
+                />
+              }
               label="Resources Tracked"
               value="8"
               description="Inventory categories"
             />
 
+
             <ReportMetric
-              icon={<ShieldAlert className="w-5 h-5 text-orange-600" />}
+              icon={
+                <ShieldAlert
+                  className="
+                    w-5
+                    h-5
+                    text-orange-600
+                    dark:text-orange-400
+                  "
+                />
+              }
               label="Priority Zones"
-              value={reportData.critical + reportData.high}
+              value={
+                reportData.critical +
+                reportData.high
+              }
               description="High + critical events"
             />
 
+
             <ReportMetric
-              icon={<CalendarDays className="w-5 h-5 text-purple-600" />}
+              icon={
+                <CalendarDays
+                  className="
+                    w-5
+                    h-5
+                    text-purple-600
+                    dark:text-purple-400
+                  "
+                />
+              }
               label="Reporting Scope"
               value="Live"
               description="Backend connected"
@@ -520,92 +845,207 @@ function Reports() {
       </div>
 
 
-      {/* ===================================== */}
-      {/* REPORT TABLE */}
-      {/* ===================================== */}
+      {/* =====================================================
+          REPORT TABLE
+      ===================================================== */}
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="
+        bg-blue-50
+        dark:bg-slate-900
+        rounded-xl
+        border
+        border-blue-200
+        dark:border-slate-800
+        shadow-sm
+        overflow-hidden
+      ">
 
-        <div className="px-5 py-4 border-b border-gray-200">
 
-          <h2 className="text-lg font-semibold text-gray-900">
+        {/* TABLE HEADER */}
+
+        <div className="
+          px-5
+          py-4
+          border-b
+          border-blue-200
+          dark:border-slate-800
+        ">
+
+          <h2 className="
+            text-lg
+            font-semibold
+            text-slate-900
+            dark:text-white
+          ">
+
             Disaster Activity Report
+
           </h2>
 
-          <p className="text-sm text-gray-500 mt-1">
-            Latest disaster records available to the system.
+
+          <p className="
+            text-sm
+            text-slate-500
+            dark:text-slate-400
+            mt-1
+          ">
+
+            Latest disaster records available
+            to the system.
+
           </p>
 
         </div>
+
+
+        {/* TABLE */}
 
         <div className="overflow-x-auto">
 
           <table className="w-full">
 
-            <thead className="bg-gray-50">
+
+            {/* TABLE HEAD */}
+
+            <thead className="
+              bg-blue-100
+              dark:bg-slate-800
+            ">
 
               <tr>
 
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  ID
-                </th>
+                {[
+                  "ID",
+                  "Type",
+                  "Country",
+                  "Location",
+                  "Severity",
+                ].map((heading) => (
 
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Type
-                </th>
+                  <th
+                    key={heading}
+                    className="
+                      text-left
+                      px-5
+                      py-3
+                      text-xs
+                      font-semibold
+                      text-slate-600
+                      dark:text-slate-400
+                      uppercase
+                    "
+                  >
 
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Country
-                </th>
+                    {heading}
 
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Location
-                </th>
+                  </th>
 
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Severity
-                </th>
+                ))}
 
               </tr>
 
             </thead>
 
-            <tbody className="divide-y divide-gray-100">
 
-              {disasters.slice(0, 10).map((disaster) => (
+            {/* TABLE BODY */}
 
-                <tr
-                  key={disaster.id}
-                  className="hover:bg-gray-50 transition"
-                >
+            <tbody className="
+              divide-y
+              divide-blue-100
+              dark:divide-slate-800
+            ">
 
-                  <td className="px-5 py-4 text-sm font-medium text-gray-900">
-                    #{disaster.id}
-                  </td>
 
-                  <td className="px-5 py-4 text-sm text-gray-700">
-                    {disaster.type || "Unknown"}
-                  </td>
+              {disasters
+                .slice(0, 10)
+                .map((disaster) => (
 
-                  <td className="px-5 py-4 text-sm text-gray-700">
-                    {disaster.country || "—"}
-                  </td>
+                  <tr
+                    key={disaster.id}
+                    className="
+                      hover:bg-blue-100/70
+                      dark:hover:bg-slate-800/60
+                      transition
+                    "
+                  >
 
-                  <td className="px-5 py-4 text-sm text-gray-700">
-                    {disaster.location || "—"}
-                  </td>
 
-                  <td className="px-5 py-4">
+                    {/* ID */}
 
-                    <SeverityBadge
-                      severity={disaster.severity}
-                    />
+                    <td className="
+                      px-5
+                      py-4
+                      text-sm
+                      font-medium
+                      text-slate-900
+                      dark:text-white
+                    ">
 
-                  </td>
+                      #{disaster.id}
 
-                </tr>
+                    </td>
 
-              ))}
+
+                    {/* TYPE */}
+
+                    <td className="
+                      px-5
+                      py-4
+                      text-sm
+                      text-slate-700
+                      dark:text-slate-300
+                    ">
+
+                      {disaster.type || "Unknown"}
+
+                    </td>
+
+
+                    {/* COUNTRY */}
+
+                    <td className="
+                      px-5
+                      py-4
+                      text-sm
+                      text-slate-700
+                      dark:text-slate-300
+                    ">
+
+                      {disaster.country || "—"}
+
+                    </td>
+
+
+                    {/* LOCATION */}
+
+                    <td className="
+                      px-5
+                      py-4
+                      text-sm
+                      text-slate-700
+                      dark:text-slate-300
+                    ">
+
+                      {disaster.location || "—"}
+
+                    </td>
+
+
+                    {/* SEVERITY */}
+
+                    <td className="px-5 py-4">
+
+                      <SeverityBadge
+                        severity={
+                          disaster.severity
+                        }
+                      />
+
+                    </td>
+
+                  </tr>
+
+                ))}
 
             </tbody>
 
@@ -616,27 +1056,133 @@ function Reports() {
       </div>
 
 
-      {/* ===================================== */}
-      {/* FOOTER */}
-      {/* ===================================== */}
+      {/* =====================================================
+          FOOTER
+      ===================================================== */}
 
-      <div className="flex items-center gap-2 text-xs text-gray-500">
+      <div className="
+        flex
+        items-center
+        gap-2
+        text-xs
+        text-slate-500
+        dark:text-slate-400
+      ">
 
         <Activity className="w-4 h-4" />
 
-        Reports are generated from the latest data available
-        from the disaster response backend.
+        Reports are generated from the latest data
+        available from the disaster response backend.
 
       </div>
 
     </div>
+
   )
 }
 
 
-// =========================================
-// SEVERITY BAR
-// =========================================
+/* =========================================================
+   SUMMARY CARD
+========================================================= */
+
+function SummaryCard({
+  label,
+  value,
+  description,
+  icon,
+  iconBg,
+  descriptionColor,
+}) {
+
+  return (
+
+    <div className="
+      bg-blue-50
+      dark:bg-slate-900
+      rounded-xl
+      border
+      border-blue-200
+      dark:border-slate-800
+      p-5
+      shadow-sm
+    ">
+
+      <div className="
+        flex
+        items-start
+        justify-between
+      ">
+
+
+        <div>
+
+          <p className="
+            text-sm
+            text-slate-500
+            dark:text-slate-400
+          ">
+
+            {label}
+
+          </p>
+
+
+          <p className="
+            text-3xl
+            font-bold
+            text-slate-900
+            dark:text-white
+            mt-2
+          ">
+
+            {value}
+
+          </p>
+
+        </div>
+
+
+        <div
+          className={`
+            w-11
+            h-11
+            rounded-lg
+            flex
+            items-center
+            justify-center
+            ${iconBg}
+          `}
+        >
+
+          {icon}
+
+        </div>
+
+      </div>
+
+
+      <p
+        className={`
+          text-xs
+          mt-4
+          ${descriptionColor}
+        `}
+      >
+
+        {description}
+
+      </p>
+
+    </div>
+
+  )
+}
+
+
+/* =========================================================
+   SEVERITY BAR
+========================================================= */
 
 function SeverityBar({
   label,
@@ -645,43 +1191,86 @@ function SeverityBar({
   color,
   textColor,
 }) {
+
   const percentage =
     total > 0
-      ? Math.round((value / total) * 100)
+      ? Math.round(
+          (value / total) * 100
+        )
       : 0
 
+
   return (
+
     <div>
 
-      <div className="flex items-center justify-between mb-2">
+      <div className="
+        flex
+        items-center
+        justify-between
+        mb-2
+      ">
 
-        <span className="text-sm font-medium text-gray-700">
+        <span className="
+          text-sm
+          font-medium
+          text-slate-700
+          dark:text-slate-300
+        ">
+
           {label}
+
         </span>
 
-        <span className={`text-sm font-semibold ${textColor}`}>
+
+        <span
+          className={`
+            text-sm
+            font-semibold
+            ${textColor}
+          `}
+        >
+
           {value} ({percentage}%)
+
         </span>
 
       </div>
 
-      <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+
+      <div className="
+        w-full
+        h-2.5
+        bg-blue-100
+        dark:bg-slate-800
+        rounded-full
+        overflow-hidden
+      ">
 
         <div
-          className={`h-full ${color} rounded-full transition-all duration-500`}
-          style={{ width: `${percentage}%` }}
+          className={`
+            h-full
+            ${color}
+            rounded-full
+            transition-all
+            duration-500
+          `}
+          style={{
+            width: `${percentage}%`,
+          }}
         />
 
       </div>
 
     </div>
+
   )
 }
 
 
-// =========================================
-// REPORT METRIC
-// =========================================
+/* =========================================================
+   REPORT METRIC
+========================================================= */
 
 function ReportMetric({
   icon,
@@ -689,65 +1278,171 @@ function ReportMetric({
   value,
   description,
 }) {
-  return (
-    <div className="flex items-center gap-3">
 
-      <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+  return (
+
+    <div className="
+      flex
+      items-center
+      gap-3
+      p-3
+      rounded-lg
+      bg-blue-100/70
+      dark:bg-slate-800
+      border
+      border-blue-100
+      dark:border-slate-700
+    ">
+
+
+      <div className="
+        w-10
+        h-10
+        rounded-lg
+        bg-blue-50
+        dark:bg-slate-900
+        flex
+        items-center
+        justify-center
+      ">
+
         {icon}
+
       </div>
+
 
       <div className="flex-1">
 
-        <p className="text-xs text-gray-500">
+        <p className="
+          text-xs
+          text-slate-500
+          dark:text-slate-400
+        ">
+
           {label}
+
         </p>
 
-        <p className="text-lg font-bold text-gray-900">
+
+        <p className="
+          text-lg
+          font-bold
+          text-slate-900
+          dark:text-white
+        ">
+
           {value}
+
         </p>
 
-        <p className="text-xs text-gray-400">
+
+        <p className="
+          text-xs
+          text-slate-400
+          dark:text-slate-500
+        ">
+
           {description}
+
         </p>
 
       </div>
 
     </div>
+
   )
 }
 
 
-// =========================================
-// SEVERITY BADGE
-// =========================================
+/* =========================================================
+   SEVERITY BADGE
+========================================================= */
 
-function SeverityBadge({ severity }) {
-  const value = Number(severity)
+function SeverityBadge({
+  severity,
+}) {
+
+  const value =
+    Number(severity)
+
 
   let label = "Not rated"
-  let style = "bg-gray-100 text-gray-500"
+
+  let style = `
+    bg-slate-100
+    text-slate-500
+    dark:bg-slate-800
+    dark:text-slate-400
+  `
+
 
   if (value >= 8) {
+
     label = "Critical"
-    style = "bg-red-100 text-red-700"
+
+    style = `
+      bg-red-100
+      text-red-700
+      dark:bg-red-950/60
+      dark:text-red-400
+    `
+
   } else if (value >= 6) {
+
     label = "High"
-    style = "bg-orange-100 text-orange-700"
+
+    style = `
+      bg-orange-100
+      text-orange-700
+      dark:bg-orange-950/60
+      dark:text-orange-400
+    `
+
   } else if (value >= 4) {
+
     label = "Medium"
-    style = "bg-yellow-100 text-yellow-700"
+
+    style = `
+      bg-yellow-100
+      text-yellow-700
+      dark:bg-yellow-950/60
+      dark:text-yellow-400
+    `
+
   } else if (value >= 1) {
+
     label = "Low"
-    style = "bg-green-100 text-green-700"
+
+    style = `
+      bg-green-100
+      text-green-700
+      dark:bg-green-950/60
+      dark:text-green-400
+    `
+
   }
 
+
   return (
+
     <span
-      className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${style}`}
+      className={`
+        inline-flex
+        px-2.5
+        py-1
+        rounded-full
+        text-xs
+        font-semibold
+        ${style}
+      `}
     >
+
       {label}
+
     </span>
+
   )
 }
+
 
 export default Reports

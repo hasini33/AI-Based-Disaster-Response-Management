@@ -1,5 +1,6 @@
 import { useState } from "react"
 
+import { useNavigate } from "react-router-dom"
 import {
   Search,
   Package,
@@ -19,10 +20,6 @@ import {
 } from "lucide-react"
 
 
-// =====================================================
-// MOCK RESOURCE DATA
-// =====================================================
-
 const resourcesData = [
   {
     id: 1,
@@ -36,7 +33,6 @@ const resourcesData = [
     status: "Available",
     lastUpdated: "10 min ago",
   },
-
   {
     id: 2,
     name: "Drinking Water",
@@ -49,7 +45,6 @@ const resourcesData = [
     status: "Available",
     lastUpdated: "15 min ago",
   },
-
   {
     id: 3,
     name: "Medical Kits",
@@ -62,7 +57,6 @@ const resourcesData = [
     status: "Low Stock",
     lastUpdated: "8 min ago",
   },
-
   {
     id: 4,
     name: "Shelter Capacity",
@@ -75,7 +69,6 @@ const resourcesData = [
     status: "Low Stock",
     lastUpdated: "20 min ago",
   },
-
   {
     id: 5,
     name: "Rescue Equipment",
@@ -88,7 +81,6 @@ const resourcesData = [
     status: "Available",
     lastUpdated: "12 min ago",
   },
-
   {
     id: 6,
     name: "Emergency Food",
@@ -101,7 +93,6 @@ const resourcesData = [
     status: "Critical",
     lastUpdated: "5 min ago",
   },
-
   {
     id: 7,
     name: "First Aid Kits",
@@ -114,7 +105,6 @@ const resourcesData = [
     status: "Low Stock",
     lastUpdated: "25 min ago",
   },
-
   {
     id: 8,
     name: "Temporary Shelters",
@@ -131,16 +121,12 @@ const resourcesData = [
 
 
 function Resources() {
-
+  const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("All")
   const [statusFilter, setStatusFilter] = useState("All")
   const [selectedResource, setSelectedResource] = useState(null)
-
-
-  // =====================================================
-  // FILTER RESOURCES
-  // =====================================================
+  
 
   const filteredResources = resourcesData.filter((resource) => {
 
@@ -167,10 +153,6 @@ function Resources() {
   })
 
 
-  // =====================================================
-  // RESOURCE ICON
-  // =====================================================
-
   function getResourceIcon(type) {
 
     if (type === "food") {
@@ -193,27 +175,19 @@ function Resources() {
   }
 
 
-  // =====================================================
-  // STATUS STYLE
-  // =====================================================
-
   function getStatusStyle(status) {
 
     if (status === "Available") {
-      return "bg-green-100 text-green-700"
+      return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
     }
 
     if (status === "Low Stock") {
-      return "bg-orange-100 text-orange-700"
+      return "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300"
     }
 
-    return "bg-red-100 text-red-700"
+    return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
   }
 
-
-  // =====================================================
-  // PROGRESS BAR STYLE
-  // =====================================================
 
   function getProgressStyle(percentage) {
 
@@ -229,21 +203,12 @@ function Resources() {
   }
 
 
-  // =====================================================
-  // CLEAR FILTERS
-  // =====================================================
-
   function clearFilters() {
-
     setSearchTerm("")
     setCategoryFilter("All")
     setStatusFilter("All")
   }
 
-
-  // =====================================================
-  // RESOURCE STATISTICS
-  // =====================================================
 
   const totalResources = resourcesData.length
 
@@ -263,24 +228,18 @@ function Resources() {
     ).length
 
 
-  // =====================================================
-  // MAIN UI
-  // =====================================================
-
   return (
 
-    <div className="space-y-6">
+    <div className="space-y-5">
 
 
-      {/* ================================================= */}
-      {/* PAGE HEADER */}
-      {/* ================================================= */}
+      {/* HEADER */}
 
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
 
         <div>
 
-          <div className="flex items-center gap-2 text-sm text-blue-600 font-medium mb-2">
+          <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 font-medium mb-2">
 
             <Package className="w-4 h-4" />
 
@@ -288,28 +247,26 @@ function Resources() {
 
           </div>
 
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             Resource Center
           </h1>
 
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-gray-600 dark:text-gray-300">
             Track relief supplies, stock levels and distribution readiness.
           </p>
 
         </div>
 
 
-        {/* Inventory Count */}
+        <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950 border border-blue-400 dark:border-blue-900 rounded-lg px-4 py-2.5 shadow-sm">
 
-        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2.5 shadow-sm">
+          <Boxes className="w-5 h-5 text-blue-600 dark:text-blue-400" />
 
-          <Boxes className="w-5 h-5 text-blue-600" />
-
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             Inventory Items
           </span>
 
-          <span className="font-bold text-gray-900">
+          <span className="font-bold text-gray-900 dark:text-white">
             {totalResources}
           </span>
 
@@ -318,139 +275,129 @@ function Resources() {
       </div>
 
 
-      {/* ================================================= */}
       {/* RESOURCE HEALTH */}
-      {/* ================================================= */}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
 
-        {/* Available */}
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-400 dark:border-blue-900 p-5 shadow-sm">
 
           <div className="flex items-center justify-between">
 
             <div>
 
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Ready for Deployment
               </p>
 
-              <p className="text-3xl font-bold text-gray-900 mt-2">
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
                 {availableResources}
               </p>
 
             </div>
 
-            <div className="w-11 h-11 rounded-lg bg-green-50 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-lg bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
 
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
 
             </div>
 
           </div>
 
-          <p className="text-xs text-green-600 mt-3">
+          <p className="text-xs text-green-600 dark:text-green-400 mt-3">
             Stock level is healthy
           </p>
 
         </div>
 
 
-        {/* Low Stock */}
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-400 dark:border-blue-900 p-5 shadow-sm">
 
           <div className="flex items-center justify-between">
 
             <div>
 
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Low Stock
               </p>
 
-              <p className="text-3xl font-bold text-gray-900 mt-2">
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
                 {lowStockResources}
               </p>
 
             </div>
 
-            <div className="w-11 h-11 rounded-lg bg-orange-50 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-lg bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
 
-              <Clock3 className="w-5 h-5 text-orange-600" />
+              <Clock3 className="w-5 h-5 text-orange-600 dark:text-orange-400" />
 
             </div>
 
           </div>
 
-          <p className="text-xs text-orange-600 mt-3">
+          <p className="text-xs text-orange-600 dark:text-orange-400 mt-3">
             Replenishment recommended
           </p>
 
         </div>
 
 
-        {/* Critical */}
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-400 dark:border-blue-900 p-5 shadow-sm">
 
           <div className="flex items-center justify-between">
 
             <div>
 
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Critical Stock
               </p>
 
-              <p className="text-3xl font-bold text-gray-900 mt-2">
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
                 {criticalResources}
               </p>
 
             </div>
 
-            <div className="w-11 h-11 rounded-lg bg-red-50 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-lg bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
 
-              <AlertTriangle className="w-5 h-5 text-red-600" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
 
             </div>
 
           </div>
 
-          <p className="text-xs text-red-600 mt-3">
+          <p className="text-xs text-red-600 dark:text-red-400 mt-3">
             Immediate attention required
           </p>
 
         </div>
 
 
-        {/* Total */}
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-400 dark:border-blue-900 p-5 shadow-sm">
 
           <div className="flex items-center justify-between">
 
             <div>
 
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Total Inventory
               </p>
 
-              <p className="text-3xl font-bold text-gray-900 mt-2">
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
                 {totalResources}
               </p>
 
             </div>
 
-            <div className="w-11 h-11 rounded-lg bg-blue-50 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
 
-              <Warehouse className="w-5 h-5 text-blue-600" />
+              <Warehouse className="w-5 h-5 text-blue-600 dark:text-blue-400" />
 
             </div>
 
           </div>
 
-          <p className="text-xs text-blue-600 mt-3">
+          <p className="text-xs text-blue-600 dark:text-blue-400 mt-3">
             Across relief centers
           </p>
 
@@ -459,25 +406,23 @@ function Resources() {
       </div>
 
 
-      {/* ================================================= */}
-      {/* SEARCH & FILTER */}
-      {/* ================================================= */}
+      {/* SEARCH */}
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-400 dark:border-blue-900 shadow-sm p-5">
 
         <div className="flex items-center justify-between mb-4">
 
           <div className="flex items-center gap-2">
 
-            <Search className="w-5 h-5 text-gray-500" />
+            <Search className="w-5 h-5 text-gray-500 dark:text-gray-400" />
 
-            <h2 className="font-semibold text-gray-900">
+            <h2 className="font-semibold text-gray-900 dark:text-white">
               Find Resources
             </h2>
 
           </div>
 
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-gray-400 dark:text-gray-500">
             {filteredResources.length} results
           </span>
 
@@ -486,8 +431,6 @@ function Resources() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-
-          {/* Search */}
 
           <div className="relative">
 
@@ -498,77 +441,43 @@ function Resources() {
               placeholder="Search resource or location..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 dark:border-gray-600 bg-blue-100 dark:bg-blue-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
 
           </div>
 
 
-          {/* Category */}
-
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-300 dark:border-gray-600 bg-blue-100 dark:bg-blue-900 text-gray-900 dark:text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
 
-            <option value="All">
-              All Categories
-            </option>
-
-            <option value="Food">
-              Food
-            </option>
-
-            <option value="Water">
-              Water
-            </option>
-
-            <option value="Medical">
-              Medical
-            </option>
-
-            <option value="Shelter">
-              Shelter
-            </option>
-
-            <option value="Rescue">
-              Rescue
-            </option>
+            <option value="All">All Categories</option>
+            <option value="Food">Food</option>
+            <option value="Water">Water</option>
+            <option value="Medical">Medical</option>
+            <option value="Shelter">Shelter</option>
+            <option value="Rescue">Rescue</option>
 
           </select>
 
 
-          {/* Status */}
-
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-300 dark:border-gray-600 bg-blue-100 dark:bg-blue-900 text-gray-900 dark:text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
 
-            <option value="All">
-              All Stock Status
-            </option>
-
-            <option value="Available">
-              Available
-            </option>
-
-            <option value="Low Stock">
-              Low Stock
-            </option>
-
-            <option value="Critical">
-              Critical
-            </option>
+            <option value="All">All Stock Status</option>
+            <option value="Available">Available</option>
+            <option value="Low Stock">Low Stock</option>
+            <option value="Critical">Critical</option>
 
           </select>
 
         </div>
 
-
-        {/* Clear */}
 
         {(searchTerm ||
           categoryFilter !== "All" ||
@@ -576,7 +485,7 @@ function Resources() {
 
           <button
             onClick={clearFilters}
-            className="flex items-center gap-2 mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium"
+            className="flex items-center gap-2 mt-4 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
           >
 
             <X className="w-4 h-4" />
@@ -590,13 +499,9 @@ function Resources() {
       </div>
 
 
-      {/* ================================================= */}
       {/* RESOURCE CARDS */}
-      {/* ================================================= */}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-
+<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
         {filteredResources.length > 0 ? (
 
           filteredResources.map((resource) => {
@@ -610,18 +515,13 @@ function Resources() {
 
               <div
                 key={resource.id}
-                className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow"
-              >
-
-
-                {/* Card Top */}
+              className="bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-400 dark:border-blue-900 shadow-sm p-4 hover:shadow-md transition-shadow">
 
                 <div className="flex items-start justify-between">
 
-
                   <div className="flex items-center gap-3">
 
-                    <div className="w-11 h-11 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <div className="w-11 h-11 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
 
                       {getResourceIcon(resource.icon)}
 
@@ -629,11 +529,11 @@ function Resources() {
 
                     <div>
 
-                      <h3 className="font-semibold text-gray-900">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
                         {resource.name}
                       </h3>
 
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         {resource.category}
                       </p>
 
@@ -641,8 +541,6 @@ function Resources() {
 
                   </div>
 
-
-                  {/* Status */}
 
                   <span
                     className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusStyle(resource.status)}`}
@@ -653,37 +551,36 @@ function Resources() {
                 </div>
 
 
-                {/* Quantity */}
-
-                <div className="mt-5">
+                <div className="mt-3">
 
                   <div className="flex items-end justify-between">
 
                     <div>
 
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
                         Current Stock
                       </p>
 
-                      <p className="text-2xl font-bold text-gray-900 mt-1">
+                      <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+
                         {resource.available.toLocaleString()}
-                        <span className="text-sm font-medium text-gray-500 ml-1">
+
+                        <span className="text-sm font-medium text-gray-500 dark:text-gray-400 ml-1">
                           {resource.unit}
                         </span>
+
                       </p>
 
                     </div>
 
-                    <span className="text-sm font-semibold text-gray-600">
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">
                       {percentage}%
                     </span>
 
                   </div>
 
 
-                  {/* Progress */}
-
-                  <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="mt-3 h-2 bg-blue-200 dark:bg-blue-900 rounded-full overflow-hidden">
 
                     <div
                       className={`h-full rounded-full ${getProgressStyle(percentage)}`}
@@ -697,11 +594,11 @@ function Resources() {
 
                   <div className="flex justify-between mt-2">
 
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
                       Available
                     </span>
 
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
                       Capacity: {resource.capacity.toLocaleString()}
                     </span>
 
@@ -710,34 +607,30 @@ function Resources() {
                 </div>
 
 
-                {/* Location */}
-
-                <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between">
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
 
                   <div className="flex items-center gap-2 min-w-0">
 
-                    <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
 
-                    <span className="text-sm text-gray-600 truncate">
+                    <span className="text-sm text-gray-600 dark:text-gray-300 truncate">
                       {resource.location}
                     </span>
 
                   </div>
 
-                  <span className="text-xs text-gray-400 ml-3 whitespace-nowrap">
+                  <span className="text-xs text-gray-400 dark:text-gray-500 ml-3 whitespace-nowrap">
                     {resource.lastUpdated}
                   </span>
 
                 </div>
 
 
-                {/* Actions */}
-
                 <div className="mt-4 flex items-center gap-3">
 
                   <button
                     onClick={() => setSelectedResource(resource)}
-                    className="flex-1 inline-flex items-center justify-center gap-2 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                    className="flex-1 inline-flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
 
                     View Details
@@ -748,15 +641,13 @@ function Resources() {
 
 
                   <button
-                    onClick={() => setSelectedResource(resource)}
-                    className="flex-1 inline-flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                  >
+  onClick={() => navigate("/allocation")}
+  className="flex-1 inline-flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+>
+  <Truck className="w-4 h-4" />
 
-                    <Truck className="w-4 h-4" />
-
-                    Allocate
-
-                  </button>
+  Allocate
+</button>
 
                 </div>
 
@@ -767,17 +658,17 @@ function Resources() {
 
         ) : (
 
-          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="lg:col-span-2 bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-400 dark:border-blue-900 p-12 text-center">
 
-            <Package className="w-10 h-10 text-gray-300 mx-auto" />
+            <Package className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto" />
 
-            <p className="text-gray-500 mt-3">
+            <p className="text-gray-500 dark:text-gray-400 mt-3">
               No resources match your filters.
             </p>
 
             <button
               onClick={clearFilters}
-              className="text-sm text-blue-600 font-medium mt-2 hover:underline"
+              className="text-sm text-blue-600 dark:text-blue-400 font-medium mt-2 hover:underline"
             >
               Clear filters
             </button>
@@ -789,25 +680,20 @@ function Resources() {
       </div>
 
 
-      {/* ================================================= */}
-      {/* RESOURCE DETAILS MODAL */}
-      {/* ================================================= */}
+      {/* RESOURCE MODAL */}
 
       {selectedResource && (
 
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 p-4">
+
+          <div className="bg-blue-50 dark:bg-blue-950 w-full max-w-lg rounded-xl shadow-xl overflow-hidden">
 
 
-          <div className="bg-white w-full max-w-lg rounded-xl shadow-xl overflow-hidden">
-
-
-            {/* Modal Header */}
-
-            <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
+            <div className="px-6 py-5 border-b border-blue-400 dark:border-blue-900 flex items-center justify-between">
 
               <div className="flex items-center gap-3">
 
-                <div className="w-11 h-11 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                <div className="w-11 h-11 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
 
                   {getResourceIcon(selectedResource.icon)}
 
@@ -815,11 +701,11 @@ function Resources() {
 
                 <div>
 
-                  <h2 className="text-lg font-semibold text-gray-900">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                     {selectedResource.name}
                   </h2>
 
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     {selectedResource.category} resource
                   </p>
 
@@ -830,7 +716,7 @@ function Resources() {
 
               <button
                 onClick={() => setSelectedResource(null)}
-                className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200"
               >
 
                 <X className="w-5 h-5" />
@@ -840,43 +726,39 @@ function Resources() {
             </div>
 
 
-            {/* Modal Content */}
-
             <div className="p-6 space-y-5">
 
 
-              {/* Stock Summary */}
-
               <div className="grid grid-cols-2 gap-4">
 
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-4">
 
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Available
                   </p>
 
-                  <p className="text-xl font-bold text-gray-900 mt-1">
+                  <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
                     {selectedResource.available.toLocaleString()}
                   </p>
 
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {selectedResource.unit}
                   </p>
 
                 </div>
 
 
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-4">
 
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Total Capacity
                   </p>
 
-                  <p className="text-xl font-bold text-gray-900 mt-1">
+                  <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
                     {selectedResource.capacity.toLocaleString()}
                   </p>
 
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {selectedResource.unit}
                   </p>
 
@@ -885,11 +767,9 @@ function Resources() {
               </div>
 
 
-              {/* Status */}
-
               <div>
 
-                <p className="text-xs text-gray-500 mb-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                   Stock Status
                 </p>
 
@@ -902,19 +782,17 @@ function Resources() {
               </div>
 
 
-              {/* Location */}
-
               <div className="flex items-start gap-3">
 
-                <Warehouse className="w-5 h-5 text-gray-400 mt-0.5" />
+                <Warehouse className="w-5 h-5 text-gray-400 dark:text-gray-500 mt-0.5" />
 
                 <div>
 
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Storage Location
                   </p>
 
-                  <p className="text-sm font-medium text-gray-800 mt-1">
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mt-1">
                     {selectedResource.location}
                   </p>
 
@@ -923,19 +801,17 @@ function Resources() {
               </div>
 
 
-              {/* Last Updated */}
-
               <div className="flex items-start gap-3">
 
-                <Clock3 className="w-5 h-5 text-gray-400 mt-0.5" />
+                <Clock3 className="w-5 h-5 text-gray-400 dark:text-gray-500 mt-0.5" />
 
                 <div>
 
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Last Inventory Update
                   </p>
 
-                  <p className="text-sm font-medium text-gray-800 mt-1">
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mt-1">
                     {selectedResource.lastUpdated}
                   </p>
 
@@ -944,25 +820,19 @@ function Resources() {
               </div>
 
 
-              {/* Allocation Button */}
-
               <button
                 onClick={() => setSelectedResource(null)}
                 className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
               >
-
                 Allocate Resource
-
               </button>
 
 
               <button
                 onClick={() => setSelectedResource(null)}
-                className="w-full border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                className="w-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-2.5 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-
                 Close
-
               </button>
 
             </div>

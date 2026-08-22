@@ -1,753 +1,1336 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
+
 import {
-  Brain,
-  Search,
+  BrainCircuit,
+  MapPin,
   AlertTriangle,
+  CheckCircle2,
   Package,
+  Truck,
+  ChevronRight,
+  Minus,
+  Plus,
+  ShieldAlert,
+  Send,
+  RotateCcw,
+  X,
   Droplets,
   HeartPulse,
-  Home,
-  TrendingUp,
-  MapPin,
-  Activity,
-  X,
+  Tent,
+  Boxes,
 } from "lucide-react"
+
 
 function AIDemand() {
 
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("All")
-  const [selectedDemand, setSelectedDemand] = useState(null)
+  // =========================================================
+  // STATE
+  // =========================================================
 
-  // --------------------------------------------------
-  // Sample AI demand data
-  // Later this can come from your FastAPI ML endpoint
-  // --------------------------------------------------
+  const [selectedZoneId, setSelectedZoneId] = useState("Z-001")
+  const [showReview, setShowReview] = useState(false)
+  const [deployed, setDeployed] = useState(false)
 
-  const demandData = [
+
+  // =========================================================
+  // ZONES
+  // =========================================================
+
+  const zones = [
     {
-      id: "DM-001",
-      disaster: "Flood",
-      location: "Guwahati",
-      zone: "Zone A",
-      resource: "Food Packets",
-      category: "Food",
-      predicted: 9200,
-      available: 8420,
-      unit: "packets",
+      id: "Z-001",
+      name: "Guwahati",
+      state: "Assam",
+      severity: "Critical",
+      affected: "8,400",
+      population: 8400,
+      status: "Immediate Response",
       confidence: 94,
-      status: "Critical",
     },
     {
-      id: "DM-002",
-      disaster: "Flood",
-      location: "Guwahati",
-      zone: "Zone A",
-      resource: "Drinking Water",
-      category: "Water",
-      predicted: 14500,
-      available: 12000,
-      unit: "liters",
+      id: "Z-002",
+      name: "Dibrugarh",
+      state: "Assam",
+      severity: "Critical",
+      affected: "6,200",
+      population: 6200,
+      status: "Evacuation Required",
       confidence: 91,
-      status: "High",
     },
     {
-      id: "DM-003",
-      disaster: "Earthquake",
-      location: "Assam",
-      zone: "Zone B",
-      resource: "Medical Kits",
-      category: "Medical",
-      predicted: 1350,
-      available: 1240,
-      unit: "kits",
-      confidence: 89,
-      status: "High",
+      id: "Z-003",
+      name: "Patna",
+      state: "Bihar",
+      severity: "High",
+      affected: "5,100",
+      population: 5100,
+      status: "Relief Required",
+      confidence: 88,
     },
     {
-      id: "DM-004",
-      disaster: "Cyclone",
-      location: "Odisha",
-      zone: "Zone C",
-      resource: "Shelter Capacity",
-      category: "Shelter",
-      predicted: 2800,
-      available: 3100,
-      unit: "people",
-      confidence: 87,
-      status: "Ready",
-    },
-    {
-      id: "DM-005",
-      disaster: "Flood",
-      location: "Patna",
-      zone: "Zone D",
-      resource: "Food Packets",
-      category: "Food",
-      predicted: 6800,
-      available: 7200,
-      unit: "packets",
-      confidence: 93,
-      status: "Ready",
-    },
-    {
-      id: "DM-006",
-      disaster: "Landslide",
-      location: "Himachal Pradesh",
-      zone: "Zone E",
-      resource: "Medical Kits",
-      category: "Medical",
-      predicted: 980,
-      available: 620,
-      unit: "kits",
-      confidence: 85,
-      status: "Critical",
+      id: "Z-004",
+      name: "Silchar",
+      state: "Assam",
+      severity: "Medium",
+      affected: "3,200",
+      population: 3200,
+      status: "Monitoring",
+      confidence: 86,
     },
   ]
 
-  // --------------------------------------------------
-  // Filtering
-  // --------------------------------------------------
 
-  const filteredData = demandData.filter((item) => {
+  // =========================================================
+  // AVAILABLE RESOURCES
+  // =========================================================
 
-    const search = searchTerm.toLowerCase()
+  const availableResources = {
+    water: 5000,
+    food: 3500,
+    medical: 700,
+    shelter: 300,
+  }
 
-    const matchesSearch =
-      item.disaster.toLowerCase().includes(search) ||
-      item.location.toLowerCase().includes(search) ||
-      item.resource.toLowerCase().includes(search) ||
-      item.zone.toLowerCase().includes(search)
 
-    const matchesStatus =
-      statusFilter === "All" ||
-      item.status === statusFilter
+  // =========================================================
+  // AI RECOMMENDATIONS
+  // =========================================================
 
-    return matchesSearch && matchesStatus
+  const recommendations = {
+    "Z-001": {
+      water: 1200,
+      food: 900,
+      medical: 180,
+      shelter: 80,
+    },
+
+    "Z-002": {
+      water: 950,
+      food: 700,
+      medical: 140,
+      shelter: 100,
+    },
+
+    "Z-003": {
+      water: 700,
+      food: 550,
+      medical: 90,
+      shelter: 60,
+    },
+
+    "Z-004": {
+      water: 400,
+      food: 300,
+      medical: 50,
+      shelter: 30,
+    },
+  }
+
+
+  // =========================================================
+  // RESOURCE STATE
+  // =========================================================
+
+  const [resources, setResources] = useState({
+    ...recommendations["Z-001"],
   })
 
-  // --------------------------------------------------
-  // Calculations
-  // --------------------------------------------------
 
-  const criticalCount =
-    demandData.filter(item => item.status === "Critical").length
+  // =========================================================
+  // SELECTED ZONE
+  // =========================================================
 
-  const highCount =
-    demandData.filter(item => item.status === "High").length
+  const selectedZone = zones.find(
+    (zone) => zone.id === selectedZoneId
+  )
 
-  const readyCount =
-    demandData.filter(item => item.status === "Ready").length
 
-  const totalPredicted =
-    demandData.reduce((sum, item) => sum + item.predicted, 0)
+  // =========================================================
+  // TOTAL ALLOCATION
+  // =========================================================
 
-  // --------------------------------------------------
-  // Resource icon
-  // --------------------------------------------------
+  const totalAllocated = useMemo(() => {
+    return Object.values(resources).reduce(
+      (total, value) => total + value,
+      0
+    )
+  }, [resources])
 
-  function getResourceIcon(category) {
 
-    if (category === "Food") {
-      return <Package className="w-5 h-5 text-blue-600" />
-    }
+  // =========================================================
+  // SELECT ZONE
+  // =========================================================
 
-    if (category === "Water") {
-      return <Droplets className="w-5 h-5 text-blue-600" />
-    }
+  function selectZone(zone) {
 
-    if (category === "Medical") {
-      return <HeartPulse className="w-5 h-5 text-blue-600" />
-    }
+    setSelectedZoneId(zone.id)
 
-    if (category === "Shelter") {
-      return <Home className="w-5 h-5 text-blue-600" />
-    }
+    setResources({
+      ...recommendations[zone.id],
+    })
 
-    return <Package className="w-5 h-5 text-blue-600" />
+    setDeployed(false)
   }
 
-  // --------------------------------------------------
-  // Status styling
-  // --------------------------------------------------
 
-  function getStatusStyle(status) {
+  // =========================================================
+  // UPDATE RESOURCE
+  // =========================================================
 
-    if (status === "Critical") {
-      return "bg-red-100 text-red-700"
-    }
+  function updateResource(resource, amount) {
 
-    if (status === "High") {
-      return "bg-orange-100 text-orange-700"
-    }
+    setResources((current) => {
 
-    return "bg-green-100 text-green-700"
+      const newValue = current[resource] + amount
+
+      if (newValue < 0) {
+        return current
+      }
+
+      if (newValue > availableResources[resource]) {
+        return current
+      }
+
+      return {
+        ...current,
+        [resource]: newValue,
+      }
+    })
+
+    setDeployed(false)
   }
 
-  // --------------------------------------------------
-  // Main UI
-  // --------------------------------------------------
+
+  // =========================================================
+  // RESET
+  // =========================================================
+
+  function resetAllocation() {
+
+    setResources({
+      ...recommendations[selectedZoneId],
+    })
+
+    setDeployed(false)
+  }
+
+
+  // =========================================================
+  // DEPLOY
+  // =========================================================
+
+  function deployResources() {
+
+    setDeployed(true)
+
+    setShowReview(false)
+  }
+
 
   return (
 
-    <div className="space-y-6">
+    <div className="w-full max-w-none space-y-5">
 
-      {/* ================= HEADER ================= */}
+      {/* =====================================================
+          PAGE HEADER
+      ===================================================== */}
 
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 
         <div>
 
-          <div className="flex items-center gap-2 text-blue-600 text-sm font-medium">
+          <div className="flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400">
 
-            <Brain className="w-5 h-5" />
+            <BrainCircuit className="w-4 h-4" />
 
-            AI Resource Intelligence
+            AI-Powered Resource Planning
 
           </div>
 
-          <h1 className="text-3xl font-bold text-gray-900 mt-2">
-            AI Demand
+          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white mt-1">
+
+            AI Demand & Allocation
+
           </h1>
 
-          <p className="text-gray-600 mt-2">
-            Predict future relief requirements using disaster and population data.
-          </p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
 
-        </div>
+            Predict emergency resource demand and review allocations
+            for affected disaster zones.
 
-        <div className="bg-white border border-gray-200 rounded-xl px-5 py-3 shadow-sm">
-
-          <div className="flex items-center gap-3">
-
-            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-
-              <Brain className="w-5 h-5 text-blue-600" />
-
-            </div>
-
-            <div>
-
-              <p className="text-xs text-gray-500">
-                AI Prediction Engine
-              </p>
-
-              <p className="text-sm font-semibold text-green-600">
-                Active
-              </p>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-
-      {/* ================= SUMMARY CARDS ================= */}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-
-        {/* Predicted Demand */}
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-
-          <div className="flex justify-between">
-
-            <div>
-
-              <p className="text-sm text-gray-500">
-                Total Predicted Demand
-              </p>
-
-              <p className="text-2xl font-bold text-gray-900 mt-2">
-                {totalPredicted.toLocaleString()}
-              </p>
-
-            </div>
-
-            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-
-            </div>
-
-          </div>
-
-          <p className="text-xs text-blue-600 mt-3">
-            AI forecast across active zones
           </p>
 
         </div>
 
 
-        {/* Critical */}
+        {/* AI ENGINE STATUS */}
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="
+          flex items-center gap-2
+          px-4 py-2.5
+          rounded-lg
+          border border-[#C9E0F5] dark:border-slate-700
+          bg-[#F2F8FF] dark:bg-slate-900
+          shrink-0
+        ">
 
-          <div className="flex justify-between">
+          <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
 
-            <div>
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
 
-              <p className="text-sm text-gray-500">
-                Critical Demand
-              </p>
+            AI Engine Ready
 
-              <p className="text-2xl font-bold text-gray-900 mt-2">
-                {criticalCount}
-              </p>
-
-            </div>
-
-            <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
-
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-
-            </div>
-
-          </div>
-
-          <p className="text-xs text-red-600 mt-3">
-            Immediate resource attention
-          </p>
-
-        </div>
-
-
-        {/* High */}
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-
-          <div className="flex justify-between">
-
-            <div>
-
-              <p className="text-sm text-gray-500">
-                High Demand
-              </p>
-
-              <p className="text-2xl font-bold text-gray-900 mt-2">
-                {highCount}
-              </p>
-
-            </div>
-
-            <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
-
-              <Activity className="w-5 h-5 text-orange-600" />
-
-            </div>
-
-          </div>
-
-          <p className="text-xs text-orange-600 mt-3">
-            Replenishment recommended
-          </p>
-
-        </div>
-
-
-        {/* Ready */}
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-
-          <div className="flex justify-between">
-
-            <div>
-
-              <p className="text-sm text-gray-500">
-                Demand Covered
-              </p>
-
-              <p className="text-2xl font-bold text-gray-900 mt-2">
-                {readyCount}
-              </p>
-
-            </div>
-
-            <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
-
-              <Package className="w-5 h-5 text-green-600" />
-
-            </div>
-
-          </div>
-
-          <p className="text-xs text-green-600 mt-3">
-            Current stock can support demand
-          </p>
-
-        </div>
-
-      </div>
-
-
-      {/* ================= SEARCH ================= */}
-
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-
-        <div className="flex items-center gap-2 mb-4">
-
-          <Search className="w-5 h-5 text-gray-500" />
-
-          <h2 className="font-semibold text-gray-900">
-            Analyze Demand
-          </h2>
-
-          <span className="ml-auto text-sm text-gray-500">
-            {filteredData.length} predictions
           </span>
 
         </div>
 
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-          <div className="relative">
-
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-
-            <input
-              type="text"
-              placeholder="Search disaster, resource, zone or location..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-
-          </div>
-
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-
-            <option value="All">
-              All Demand Status
-            </option>
-
-            <option value="Critical">
-              Critical
-            </option>
-
-            <option value="High">
-              High
-            </option>
-
-            <option value="Ready">
-              Ready
-            </option>
-
-          </select>
-
-        </div>
-
       </div>
 
 
-      {/* ================= AI INFORMATION ================= */}
+      {/* =====================================================
+          AFFECTED ZONES
+      ===================================================== */}
 
-      <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
+      <div className="
+        bg-[#F2F8FF]
+        dark:bg-slate-900
+        border border-[#C9E0F5]
+        dark:border-slate-700
+        rounded-xl
+        overflow-hidden
+      ">
 
-        <div className="flex items-start gap-4">
+        {/* HEADER */}
 
-          <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center">
+        <div className="
+          px-5 py-4
+          border-b border-[#D6E7F6]
+          dark:border-slate-700
+        ">
 
-            <Brain className="w-5 h-5 text-blue-600" />
+          <div className="flex items-center justify-between">
 
-          </div>
+            <div>
 
-          <div>
+              <h2 className="font-semibold text-sm text-slate-900 dark:text-white">
 
-            <h3 className="font-semibold text-gray-900">
-              How AI Demand Prediction Works
-            </h3>
+                Affected Zones
 
-            <p className="text-sm text-gray-600 mt-1">
-              The prediction model estimates future resource requirements
-              using disaster severity, affected population, damage level,
-              demographic information and disaster type.
-            </p>
+              </h2>
+
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+
+                Select a disaster zone to view AI demand prediction
+
+              </p>
+
+            </div>
+
+
+            <span className="
+              text-xs
+              font-semibold
+              px-2 py-1
+              rounded-md
+              bg-[#E8F3FF]
+              text-blue-600
+              dark:bg-blue-950/50
+              dark:text-blue-400
+            ">
+
+              {zones.length} zones
+
+            </span>
 
           </div>
 
         </div>
 
-      </div>
 
+        {/* ZONE CARDS */}
 
-      {/* ================= DEMAND TABLE ================= */}
+        <div className="p-4">
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
 
-        <div className="px-5 py-4 border-b border-gray-200">
+            {zones.map((zone) => (
 
-          <h2 className="text-lg font-semibold text-gray-900">
-            AI Demand Predictions
-          </h2>
+              <button
+                key={zone.id}
+                onClick={() => selectZone(zone)}
+                className={`
+                  w-full
+                  text-left
+                  rounded-xl
+                  border
+                  p-4
+                  transition-all
+                  ${
+                    selectedZoneId === zone.id
+                      ? `
+                        border-blue-500
+                        bg-[#E3F0FF]
+                        dark:bg-blue-950/50
+                        shadow-sm
+                      `
+                      : `
+                        border-[#C9E0F5]
+                        bg-[#F2F8FF]
+                        hover:bg-[#E8F3FF]
+                        hover:border-blue-300
+                        dark:border-slate-700
+                        dark:bg-slate-900
+                        dark:hover:bg-slate-800
+                      `
+                  }
+                `}
+              >
 
-          <p className="text-sm text-gray-500 mt-1">
-            Resource requirements predicted for affected zones.
-          </p>
+                <div className="flex items-start justify-between gap-3">
 
-        </div>
+                  <div className="flex items-center gap-2 min-w-0">
 
+                    <MapPin
+                      className={`
+                        w-4 h-4
+                        shrink-0
+                        ${
+                          selectedZoneId === zone.id
+                            ? "text-blue-600 dark:text-blue-400"
+                            : "text-slate-400"
+                        }
+                      `}
+                    />
 
-        <div className="overflow-x-auto">
+                    <div className="min-w-0">
 
-          <table className="w-full">
+                      <p className="text-sm font-semibold truncate text-slate-900 dark:text-white">
 
-            <thead className="bg-gray-50">
+                        {zone.name}
 
-              <tr>
-
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Resource
-                </th>
-
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Disaster
-                </th>
-
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Location
-                </th>
-
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Predicted
-                </th>
-
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Available
-                </th>
-
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Confidence
-                </th>
-
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Status
-                </th>
-
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
-                  Action
-                </th>
-
-              </tr>
-
-            </thead>
-
-
-            <tbody className="divide-y divide-gray-100">
-
-              {filteredData.length > 0 ? (
-
-                filteredData.map((item) => (
-
-                  <tr
-                    key={item.id}
-                    className="hover:bg-gray-50 transition"
-                  >
-
-                    {/* Resource */}
-
-                    <td className="px-5 py-4">
-
-                      <div className="flex items-center gap-3">
-
-                        <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-
-                          {getResourceIcon(item.category)}
-
-                        </div>
-
-                        <div>
-
-                          <p className="text-sm font-semibold text-gray-900">
-                            {item.resource}
-                          </p>
-
-                          <p className="text-xs text-gray-500">
-                            {item.unit}
-                          </p>
-
-                        </div>
-
-                      </div>
-
-                    </td>
-
-
-                    {/* Disaster */}
-
-                    <td className="px-5 py-4 text-sm text-gray-700">
-                      {item.disaster}
-                    </td>
-
-
-                    {/* Location */}
-
-                    <td className="px-5 py-4">
-
-                      <div className="flex items-center gap-2 text-sm text-gray-700">
-
-                        <MapPin className="w-4 h-4 text-gray-400" />
-
-                        {item.location}
-
-                      </div>
-
-                      <p className="text-xs text-gray-400 ml-6">
-                        {item.zone}
                       </p>
 
-                    </td>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
 
+                        {zone.state}
 
-                    {/* Predicted */}
-
-                    <td className="px-5 py-4">
-
-                      <p className="text-sm font-bold text-gray-900">
-                        {item.predicted.toLocaleString()}
                       </p>
 
-                    </td>
+                    </div>
+
+                  </div>
 
 
-                    {/* Available */}
-
-                    <td className="px-5 py-4">
-
-                      <p className="text-sm text-gray-700">
-                        {item.available.toLocaleString()}
-                      </p>
-
-                    </td>
-
-
-                    {/* Confidence */}
-
-                    <td className="px-5 py-4">
-
-                      <div className="flex items-center gap-2">
-
-                        <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
-
-                          <div
-                            className="h-full bg-blue-500 rounded-full"
-                            style={{
-                              width: `${item.confidence}%`,
-                            }}
-                          />
-
-                        </div>
-
-                        <span className="text-xs font-medium text-gray-600">
-                          {item.confidence}%
-                        </span>
-
-                      </div>
-
-                    </td>
-
-
-                    {/* Status */}
-
-                    <td className="px-5 py-4">
-
-                      <span
-                        className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusStyle(item.status)}`}
-                      >
-                        {item.status}
-                      </span>
-
-                    </td>
-
-
-                    {/* Action */}
-
-                    <td className="px-5 py-4">
-
-                      <button
-                        onClick={() => setSelectedDemand(item)}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                      >
-                        View
-                      </button>
-
-                    </td>
-
-                  </tr>
-
-                ))
-
-              ) : (
-
-                <tr>
-
-                  <td
-                    colSpan="8"
-                    className="text-center py-12"
-                  >
-
-                    <Brain className="w-8 h-8 text-gray-300 mx-auto" />
-
-                    <p className="text-gray-500 mt-3">
-                      No demand predictions match your filters.
-                    </p>
-
-                  </td>
-
-                </tr>
-
-              )}
-
-            </tbody>
-
-          </table>
-
-        </div>
-
-      </div>
-
-
-      {/* ================= DETAILS MODAL ================= */}
-
-      {selectedDemand && (
-
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-
-          <div className="bg-white w-full max-w-lg rounded-xl shadow-xl">
-
-            {/* Header */}
-
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-
-              <div>
-
-                <div className="flex items-center gap-2">
-
-                  <Brain className="w-5 h-5 text-blue-600" />
-
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    AI Prediction Details
-                  </h2>
+                  <SeverityBadge
+                    severity={zone.severity}
+                  />
 
                 </div>
 
-                <p className="text-sm text-gray-500 mt-1">
-                  {selectedDemand.id}
+
+                <div className="flex items-end justify-between mt-4">
+
+                  <div>
+
+                    <p className="text-[11px] text-slate-400">
+
+                      Affected population
+
+                    </p>
+
+                    <p className="text-sm font-semibold mt-0.5 text-slate-900 dark:text-white">
+
+                      {zone.affected}
+
+                    </p>
+
+                  </div>
+
+
+                  <ChevronRight
+                    className={`
+                      w-4 h-4
+                      ${
+                        selectedZoneId === zone.id
+                          ? "text-blue-600"
+                          : "text-slate-400"
+                      }
+                    `}
+                  />
+
+                </div>
+
+              </button>
+
+            ))}
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      {/* =====================================================
+          MAIN CONTENT
+      ===================================================== */}
+
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start">
+
+
+        {/* ===================================================
+            LEFT / MAIN AREA
+        =================================================== */}
+
+        <div className="min-w-0 space-y-5">
+
+
+          {/* =================================================
+              SELECTED ZONE + AI DEMAND
+          ================================================= */}
+
+          <div className="
+            bg-[#F2F8FF]
+            dark:bg-slate-900
+            border border-[#C9E0F5]
+            dark:border-slate-700
+            rounded-xl
+            overflow-hidden
+          ">
+
+            {/* HEADER */}
+
+            <div className="
+              px-5 py-4
+              border-b border-[#D6E7F6]
+              dark:border-slate-700
+            ">
+
+              <div className="flex items-center justify-between gap-4">
+
+                <div className="min-w-0">
+
+                  <div className="flex items-center gap-2 flex-wrap">
+
+                    <MapPin className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+
+                    <h2 className="font-semibold text-slate-900 dark:text-white">
+
+                      {selectedZone.name}
+
+                    </h2>
+
+                    <SeverityBadge
+                      severity={selectedZone.severity}
+                    />
+
+                  </div>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+
+                    {selectedZone.status}
+
+                  </p>
+
+                </div>
+
+
+                <button
+                  onClick={resetAllocation}
+                  className="
+                    flex items-center gap-1.5
+                    text-xs font-medium
+                    text-slate-500
+                    hover:text-blue-600
+                    dark:hover:text-blue-400
+                    shrink-0
+                  "
+                >
+
+                  <RotateCcw className="w-3.5 h-3.5" />
+
+                  Reset
+
+                </button>
+
+              </div>
+
+            </div>
+
+
+            {/* AI DEMAND */}
+
+            <div className="p-5">
+
+              <div className="
+                flex flex-col
+                sm:flex-row
+                sm:items-center
+                sm:justify-between
+                gap-3
+                mb-4
+              ">
+
+                <div>
+
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+
+                    AI Demand Prediction
+
+                  </h3>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+
+                    Estimated emergency requirements
+
+                  </p>
+
+                </div>
+
+
+                <div className="
+                  flex items-center gap-1.5
+                  text-xs font-semibold
+                  text-green-600 dark:text-green-400
+                ">
+
+                  <CheckCircle2 className="w-4 h-4" />
+
+                  {selectedZone.confidence}% confidence
+
+                </div>
+
+              </div>
+
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+
+                <DemandCard
+                  icon={<Droplets />}
+                  label="Water"
+                  value={recommendations[selectedZoneId].water}
+                  unit="L"
+                />
+
+                <DemandCard
+                  icon={<Boxes />}
+                  label="Food"
+                  value={recommendations[selectedZoneId].food}
+                  unit="packets"
+                />
+
+                <DemandCard
+                  icon={<HeartPulse />}
+                  label="Medical"
+                  value={recommendations[selectedZoneId].medical}
+                  unit="kits"
+                />
+
+                <DemandCard
+                  icon={<Tent />}
+                  label="Shelter"
+                  value={recommendations[selectedZoneId].shelter}
+                  unit="capacity"
+                />
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              RESOURCE ALLOCATION
+          ================================================= */}
+
+          <div className="
+            bg-[#F2F8FF]
+            dark:bg-slate-900
+            border border-[#C9E0F5]
+            dark:border-slate-700
+            rounded-xl
+            overflow-hidden
+          ">
+
+            <div className="
+              px-5 py-4
+              border-b border-[#D6E7F6]
+              dark:border-slate-700
+            ">
+
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+
+                Resource Allocation
+
+              </h3>
+
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+
+                Adjust the AI recommendation if required
+
+              </p>
+
+            </div>
+
+
+            <div className="p-5 space-y-3">
+
+              <ResourceControl
+                icon={<Droplets />}
+                label="Water"
+                unit="liters"
+                value={resources.water}
+                available={availableResources.water}
+                onDecrease={() =>
+                  updateResource("water", -100)
+                }
+                onIncrease={() =>
+                  updateResource("water", 100)
+                }
+              />
+
+
+              <ResourceControl
+                icon={<Boxes />}
+                label="Food Packets"
+                unit="packets"
+                value={resources.food}
+                available={availableResources.food}
+                onDecrease={() =>
+                  updateResource("food", -100)
+                }
+                onIncrease={() =>
+                  updateResource("food", 100)
+                }
+              />
+
+
+              <ResourceControl
+                icon={<HeartPulse />}
+                label="Medical Kits"
+                unit="kits"
+                value={resources.medical}
+                available={availableResources.medical}
+                onDecrease={() =>
+                  updateResource("medical", -10)
+                }
+                onIncrease={() =>
+                  updateResource("medical", 10)
+                }
+              />
+
+
+              <ResourceControl
+                icon={<Tent />}
+                label="Shelter Capacity"
+                unit="people"
+                value={resources.shelter}
+                available={availableResources.shelter}
+                onDecrease={() =>
+                  updateResource("shelter", -10)
+                }
+                onIncrease={() =>
+                  updateResource("shelter", 10)
+                }
+              />
+
+            </div>
+
+
+            {/* TOTAL */}
+
+            <div className="
+              mx-5 mb-5
+              p-4
+              rounded-lg
+              bg-[#E8F3FF]
+              dark:bg-blue-950/50
+              border border-[#C9E0F5]
+              dark:border-blue-900
+            ">
+
+              <div className="flex items-center justify-between">
+
+                <div>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+
+                    Total allocated units
+
+                  </p>
+
+                  <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">
+
+                    {totalAllocated.toLocaleString()}
+
+                  </p>
+
+                </div>
+
+
+                <Package className="w-7 h-7 text-blue-600 dark:text-blue-400" />
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* ===================================================
+            RIGHT SIDEBAR
+        =================================================== */}
+
+        <div className="min-w-0 space-y-5">
+
+
+          {/* =================================================
+              AI RECOMMENDATION
+          ================================================= */}
+
+          <div className="
+            bg-[#F2F8FF]
+            dark:bg-slate-900
+            border border-[#C9E0F5]
+            dark:border-slate-700
+            rounded-xl
+            overflow-hidden
+          ">
+
+            <div className="
+              px-5 py-4
+              border-b border-[#D6E7F6]
+              dark:border-slate-700
+            ">
+
+              <div className="flex items-center gap-3">
+
+                <div className="
+                  w-10 h-10
+                  shrink-0
+                  rounded-lg
+                  bg-[#E8F3FF]
+                  dark:bg-blue-950/50
+                  flex items-center justify-center
+                ">
+
+                  <BrainCircuit className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+
+                </div>
+
+                <div>
+
+                  <h2 className="font-semibold text-slate-900 dark:text-white">
+
+                    AI Recommendation
+
+                  </h2>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+
+                    Suggested allocation for this zone
+
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <div className="p-5">
+
+              {/* PRIORITY */}
+
+              <div className="
+                rounded-lg
+                border border-[#C9E0F5]
+                dark:border-blue-900
+                bg-[#E8F3FF]
+                dark:bg-blue-950/50
+                p-4
+              ">
+
+                <div className="flex items-start gap-3">
+
+                  <ShieldAlert className="
+                    w-5 h-5
+                    text-blue-600
+                    dark:text-blue-400
+                    shrink-0
+                    mt-0.5
+                  " />
+
+                  <div>
+
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+
+                      Priority: {selectedZone.severity}
+
+                    </p>
+
+                    <p className="
+                      text-xs
+                      text-slate-500
+                      dark:text-slate-400
+                      mt-1
+                      leading-relaxed
+                    ">
+
+                      Based on affected population, disaster severity
+                      and current zone priority.
+
+                    </p>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              {/* VALUES */}
+
+              <div className="mt-5 space-y-1">
+
+                <RecommendationRow
+                  label="Water"
+                  value={recommendations[selectedZoneId].water}
+                  unit="L"
+                />
+
+                <RecommendationRow
+                  label="Food"
+                  value={recommendations[selectedZoneId].food}
+                  unit="packets"
+                />
+
+                <RecommendationRow
+                  label="Medical"
+                  value={recommendations[selectedZoneId].medical}
+                  unit="kits"
+                />
+
+                <RecommendationRow
+                  label="Shelter"
+                  value={recommendations[selectedZoneId].shelter}
+                  unit="capacity"
+                />
+
+              </div>
+
+
+              {/* STATUS */}
+
+              <div className="
+                mt-4 pt-4
+                border-t border-[#D6E7F6]
+                dark:border-slate-700
+              ">
+
+                <div className="
+                  flex items-center gap-2
+                  text-xs
+                  text-green-600
+                  dark:text-green-400
+                ">
+
+                  <CheckCircle2 className="w-4 h-4" />
+
+                  AI recommendation available
+
+                </div>
+
+              </div>
+
+
+              {/* CONFIDENCE */}
+
+              <div className="mt-4">
+
+                <div className="flex items-center justify-between mb-1.5">
+
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+
+                    Prediction confidence
+
+                  </span>
+
+                  <span className="text-xs font-semibold text-slate-900 dark:text-white">
+
+                    {selectedZone.confidence}%
+
+                  </span>
+
+                </div>
+
+
+                <div className="
+                  h-1.5
+                  rounded-full
+                  bg-slate-200
+                  dark:bg-slate-800
+                  overflow-hidden
+                ">
+
+                  <div
+                    className="
+                      h-full
+                      rounded-full
+                      bg-blue-500
+                      transition-all
+                      duration-300
+                    "
+                    style={{
+                      width: `${selectedZone.confidence}%`,
+                    }}
+                  />
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              RESOURCE DEPOT
+          ================================================= */}
+
+          <div className="
+            bg-[#F2F8FF]
+            dark:bg-slate-900
+            border border-[#C9E0F5]
+            dark:border-slate-700
+            rounded-xl
+            p-5
+          ">
+
+            <div className="flex items-center gap-3">
+
+              <div className="
+                w-10 h-10
+                shrink-0
+                rounded-lg
+                bg-[#E8F3FF]
+                dark:bg-blue-950/50
+                flex items-center justify-center
+              ">
+
+                <Truck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+
+              </div>
+
+              <div>
+
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+
+                  Nearest Resource Depot
+
+                </p>
+
+                <p className="text-sm font-semibold mt-1 text-slate-900 dark:text-white">
+
+                  Central Relief Depot
+
+                </p>
+
+                <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
+
+                  Dispatch available
+
                 </p>
 
               </div>
 
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              RESPONSE PRIORITY
+          ================================================= */}
+
+          <div className="
+            bg-[#F2F8FF]
+            dark:bg-slate-900
+            border border-[#C9E0F5]
+            dark:border-slate-700
+            rounded-xl
+            p-5
+          ">
+
+            <div className="flex items-start gap-3">
+
+              <div className="
+                w-10 h-10
+                shrink-0
+                rounded-lg
+                bg-orange-50
+                dark:bg-orange-950/30
+                flex items-center justify-center
+              ">
+
+                <AlertTriangle className="
+                  w-5 h-5
+                  text-orange-600
+                  dark:text-orange-400
+                " />
+
+              </div>
+
+              <div>
+
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+
+                  Response Priority
+
+                </p>
+
+                <p className="
+                  text-xs
+                  text-slate-500
+                  dark:text-slate-400
+                  mt-1
+                  leading-relaxed
+                ">
+
+                  {selectedZone.status}. Resource deployment should
+                  be verified before dispatching to the field.
+
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      {/* =====================================================
+          DEPLOYMENT FOOTER
+      ===================================================== */}
+
+      <div className="
+        bg-[#F2F8FF]
+        dark:bg-slate-900
+        border border-[#C9E0F5]
+        dark:border-slate-700
+        rounded-xl
+        p-5
+      ">
+
+        <div className="
+          flex flex-col
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+          gap-4
+        ">
+
+          <div className="flex items-center gap-4 min-w-0">
+
+            <div className="
+              w-11 h-11
+              shrink-0
+              rounded-lg
+              bg-[#E8F3FF]
+              dark:bg-blue-950/50
+              flex items-center justify-center
+            ">
+
+              {deployed ? (
+
+                <CheckCircle2 className="
+                  w-5 h-5
+                  text-green-600
+                  dark:text-green-400
+                " />
+
+              ) : (
+
+                <Send className="
+                  w-5 h-5
+                  text-blue-600
+                  dark:text-blue-400
+                " />
+
+              )}
+
+            </div>
+
+
+            <div className="min-w-0">
+
+              <p className="font-semibold text-slate-900 dark:text-white">
+
+                {deployed
+                  ? "Resources deployed successfully"
+                  : `Ready to allocate resources to ${selectedZone.name}`
+                }
+
+              </p>
+
+              <p className="
+                text-xs
+                text-slate-500
+                dark:text-slate-400
+                mt-1
+              ">
+
+                {deployed
+                  ? "Deployment has been recorded for this response zone."
+                  : `${totalAllocated.toLocaleString()} total resource units selected`
+                }
+
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <div className="flex items-center gap-3 shrink-0">
+
+            {!deployed && (
+
               <button
-                onClick={() => setSelectedDemand(null)}
-                className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                onClick={() => setShowReview(true)}
+                className="
+                  px-5 py-2.5
+                  rounded-lg
+                  border border-slate-300
+                  dark:border-slate-700
+                  text-sm font-semibold
+                  text-slate-700
+                  dark:text-slate-200
+                  hover:bg-white
+                  dark:hover:bg-slate-800
+                  transition
+                "
+              >
+
+                Review Allocation
+
+              </button>
+
+            )}
+
+
+            {deployed && (
+
+              <button
+                onClick={() => {
+                  setDeployed(false)
+                  resetAllocation()
+                }}
+                className="
+                  px-5 py-2.5
+                  rounded-lg
+                  border border-slate-300
+                  dark:border-slate-700
+                  text-sm font-semibold
+                  text-slate-700
+                  dark:text-slate-200
+                  hover:bg-white
+                  dark:hover:bg-slate-800
+                  transition
+                "
+              >
+
+                New Allocation
+
+              </button>
+
+            )}
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      {/* =====================================================
+          REVIEW MODAL
+      ===================================================== */}
+
+      {showReview && (
+
+        <div className="
+          fixed inset-0
+          z-50
+          bg-black/60
+          flex items-center justify-center
+          p-4
+        ">
+
+          <div className="
+            w-full
+            max-w-md
+            bg-[#F2F8FF]
+            dark:bg-slate-900
+            rounded-xl
+            shadow-2xl
+            overflow-hidden
+          ">
+
+            {/* HEADER */}
+
+            <div className="
+              px-5 py-4
+              border-b border-[#D6E7F6]
+              dark:border-slate-700
+              flex items-center justify-between
+            ">
+
+              <div>
+
+                <p className="
+                  text-xs
+                  text-blue-600
+                  dark:text-blue-400
+                  font-semibold
+                ">
+
+                  ALLOCATION REVIEW
+
+                </p>
+
+                <h2 className="
+                  text-lg
+                  font-bold
+                  mt-1
+                  text-slate-900
+                  dark:text-white
+                ">
+
+                  {selectedZone.name}
+
+                </h2>
+
+              </div>
+
+
+              <button
+                onClick={() => setShowReview(false)}
+                className="
+                  p-2
+                  rounded-lg
+                  hover:bg-[#E8F3FF]
+                  dark:hover:bg-slate-800
+                "
               >
 
                 <X className="w-5 h-5" />
@@ -757,140 +1340,117 @@ function AIDemand() {
             </div>
 
 
-            {/* Content */}
+            {/* BODY */}
 
-            <div className="p-6 space-y-5">
+            <div className="p-5 space-y-3">
 
-              <div className="grid grid-cols-2 gap-4">
+              <ReviewRow
+                label="Water"
+                value={`${resources.water.toLocaleString()} L`}
+              />
 
-                <div>
+              <ReviewRow
+                label="Food Packets"
+                value={`${resources.food.toLocaleString()}`}
+              />
 
-                  <p className="text-xs text-gray-500">
-                    Disaster
-                  </p>
+              <ReviewRow
+                label="Medical Kits"
+                value={`${resources.medical.toLocaleString()}`}
+              />
 
-                  <p className="font-semibold text-gray-900 mt-1">
-                    {selectedDemand.disaster}
-                  </p>
+              <ReviewRow
+                label="Shelter Capacity"
+                value={`${resources.shelter.toLocaleString()}`}
+              />
 
-                </div>
 
-                <div>
+              <div className="
+                p-3
+                rounded-lg
+                bg-yellow-50
+                dark:bg-yellow-950/20
+                border border-yellow-200
+                dark:border-yellow-900/50
+              ">
 
-                  <p className="text-xs text-gray-500">
-                    Location
-                  </p>
+                <div className="flex gap-2">
 
-                  <p className="font-semibold text-gray-900 mt-1">
-                    {selectedDemand.location}
-                  </p>
+                  <AlertTriangle className="
+                    w-4 h-4
+                    text-yellow-600
+                    dark:text-yellow-400
+                    mt-0.5
+                    shrink-0
+                  " />
 
-                </div>
+                  <p className="
+                    text-xs
+                    text-yellow-700
+                    dark:text-yellow-400
+                  ">
 
-                <div>
+                    Please verify the allocation before deploying
+                    resources to the field.
 
-                  <p className="text-xs text-gray-500">
-                    Resource
-                  </p>
-
-                  <p className="font-semibold text-gray-900 mt-1">
-                    {selectedDemand.resource}
-                  </p>
-
-                </div>
-
-                <div>
-
-                  <p className="text-xs text-gray-500">
-                    Zone
-                  </p>
-
-                  <p className="font-semibold text-gray-900 mt-1">
-                    {selectedDemand.zone}
                   </p>
 
                 </div>
 
               </div>
 
-
-              <div className="bg-blue-50 rounded-lg p-4">
-
-                <p className="text-xs text-gray-500">
-                  Predicted Requirement
-                </p>
-
-                <p className="text-2xl font-bold text-blue-700 mt-1">
-                  {selectedDemand.predicted.toLocaleString()}{" "}
-                  <span className="text-sm font-medium">
-                    {selectedDemand.unit}
-                  </span>
-                </p>
-
-              </div>
+            </div>
 
 
-              <div>
+            {/* FOOTER */}
 
-                <div className="flex justify-between">
-
-                  <p className="text-sm text-gray-600">
-                    Prediction Confidence
-                  </p>
-
-                  <p className="text-sm font-semibold">
-                    {selectedDemand.confidence}%
-                  </p>
-
-                </div>
-
-                <div className="w-full h-2 bg-gray-100 rounded-full mt-2">
-
-                  <div
-                    className="h-full bg-blue-500 rounded-full"
-                    style={{
-                      width: `${selectedDemand.confidence}%`,
-                    }}
-                  />
-
-                </div>
-
-              </div>
-
-
-              <div className="flex justify-between items-center">
-
-                <span className="text-sm text-gray-600">
-                  Current availability
-                </span>
-
-                <span className="font-semibold text-gray-900">
-                  {selectedDemand.available.toLocaleString()}{" "}
-                  {selectedDemand.unit}
-                </span>
-
-              </div>
-
-
-              <div className="flex justify-between items-center">
-
-                <span className="text-sm text-gray-600">
-                  Demand status
-                </span>
-
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusStyle(selectedDemand.status)}`}
-                >
-                  {selectedDemand.status}
-                </span>
-
-              </div>
+            <div className="
+              px-5 py-4
+              bg-[#E8F3FF]
+              dark:bg-slate-800
+              border-t border-[#C9E0F5]
+              dark:border-slate-700
+              flex justify-end
+              gap-3
+            ">
 
               <button
-                onClick={() => setSelectedDemand(null)}
-                className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition"
+                onClick={() => setShowReview(false)}
+                className="
+                  px-4 py-2
+                  rounded-lg
+                  text-sm font-medium
+                  border border-slate-300
+                  dark:border-slate-700
+                  hover:bg-white
+                  dark:hover:bg-slate-900
+                  transition
+                "
               >
-                Close
+
+                Cancel
+
+              </button>
+
+
+              <button
+                onClick={deployResources}
+                className="
+                  flex items-center gap-2
+                  px-4 py-2
+                  rounded-lg
+                  bg-blue-600
+                  hover:bg-blue-700
+                  text-white
+                  text-sm font-semibold
+                  transition
+                "
+              >
+
+                <Send className="w-4 h-4" />
+
+                Deploy Resources
+
               </button>
 
             </div>
@@ -902,7 +1462,438 @@ function AIDemand() {
       )}
 
     </div>
+
   )
 }
+
+
+/* =========================================================
+   DEMAND CARD
+========================================================= */
+
+function DemandCard({
+  icon,
+  label,
+  value,
+  unit,
+}) {
+
+  return (
+
+    <div className="
+      border border-[#C9E0F5]
+      dark:border-slate-700
+      bg-[#E8F3FF]
+      dark:bg-slate-800
+      rounded-lg
+      p-3.5
+    ">
+
+      <div className="flex items-center gap-3">
+
+        <div className="
+          w-9 h-9
+          shrink-0
+          rounded-lg
+          bg-[#DCEEFF]
+          dark:bg-blue-950/60
+          flex items-center
+          justify-center
+          text-blue-600
+          dark:text-blue-400
+        ">
+
+          <span className="[&>svg]:w-4 [&>svg]:h-4">
+
+            {icon}
+
+          </span>
+
+        </div>
+
+
+        <div className="min-w-0">
+
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+
+            {label}
+
+          </p>
+
+          <p className="
+            text-sm
+            font-bold
+            mt-0.5
+            text-slate-900
+            dark:text-white
+          ">
+
+            {value.toLocaleString()} {unit}
+
+          </p>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  )
+}
+
+
+/* =========================================================
+   RESOURCE CONTROL
+========================================================= */
+
+function ResourceControl({
+  icon,
+  label,
+  unit,
+  value,
+  available,
+  onDecrease,
+  onIncrease,
+}) {
+
+  const percentage = Math.min(
+    Math.round((value / available) * 100),
+    100
+  )
+
+
+  return (
+
+    <div className="
+      border border-[#C9E0F5]
+      dark:border-slate-700
+      bg-[#E8F3FF]
+      dark:bg-slate-800
+      rounded-lg
+      p-4
+    ">
+
+      <div className="
+        flex flex-col
+        sm:flex-row
+        sm:items-center
+        gap-4
+      ">
+
+        {/* ICON */}
+
+        <div className="
+          w-10 h-10
+          shrink-0
+          rounded-lg
+          bg-[#DCEEFF]
+          dark:bg-blue-950/60
+          flex items-center
+          justify-center
+          text-blue-600
+          dark:text-blue-400
+        ">
+
+          <span className="[&>svg]:w-5 [&>svg]:h-5">
+
+            {icon}
+
+          </span>
+
+        </div>
+
+
+        {/* INFO */}
+
+        <div className="flex-1 min-w-0">
+
+          <p className="
+            text-sm
+            font-semibold
+            text-slate-900
+            dark:text-white
+          ">
+
+            {label}
+
+          </p>
+
+          <p className="text-xs text-slate-400 mt-0.5">
+
+            Available: {available.toLocaleString()} {unit}
+
+          </p>
+
+        </div>
+
+
+        {/* CONTROLS */}
+
+        <div className="
+          flex items-center gap-2
+          self-start
+          sm:self-center
+        ">
+
+          <button
+            onClick={onDecrease}
+            className="
+              w-9 h-9
+              rounded-md
+              border border-[#C9E0F5]
+              dark:border-slate-600
+              flex items-center
+              justify-center
+              text-slate-600
+              dark:text-slate-300
+              hover:bg-white
+              dark:hover:bg-slate-700
+              transition
+            "
+          >
+
+            <Minus className="w-4 h-4" />
+
+          </button>
+
+
+          <div className="w-20 text-center">
+
+            <p className="
+              font-bold
+              text-sm
+              text-slate-900
+              dark:text-white
+            ">
+
+              {value.toLocaleString()}
+
+            </p>
+
+            <p className="text-[10px] text-slate-400">
+
+              {unit}
+
+            </p>
+
+          </div>
+
+
+          <button
+            onClick={onIncrease}
+            className="
+              w-9 h-9
+              rounded-md
+              border border-[#C9E0F5]
+              dark:border-slate-600
+              flex items-center
+              justify-center
+              text-slate-600
+              dark:text-slate-300
+              hover:bg-white
+              dark:hover:bg-slate-700
+              transition
+            "
+          >
+
+            <Plus className="w-4 h-4" />
+
+          </button>
+
+        </div>
+
+      </div>
+
+
+      {/* PROGRESS */}
+
+      <div className="mt-3">
+
+        <div className="
+          flex items-center justify-between
+          text-[10px]
+          text-slate-400
+          mb-1
+        ">
+
+          <span>Allocation</span>
+
+          <span>{percentage}%</span>
+
+        </div>
+
+
+        <div className="
+          h-1.5
+          rounded-full
+          bg-slate-200
+          dark:bg-slate-700
+          overflow-hidden
+        ">
+
+          <div
+            className="
+              h-full
+              bg-blue-500
+              rounded-full
+              transition-all
+              duration-300
+            "
+            style={{
+              width: `${percentage}%`,
+            }}
+          />
+
+        </div>
+
+      </div>
+
+    </div>
+
+  )
+}
+
+
+/* =========================================================
+   RECOMMENDATION ROW
+========================================================= */
+
+function RecommendationRow({
+  label,
+  value,
+  unit,
+}) {
+
+  return (
+
+    <div className="
+      flex
+      items-center
+      justify-between
+      gap-4
+      py-2.5
+    ">
+
+      <span className="text-sm text-slate-600 dark:text-slate-300">
+
+        {label}
+
+      </span>
+
+      <span className="
+        text-sm
+        font-bold
+        text-right
+        text-slate-900
+        dark:text-white
+      ">
+
+        {value.toLocaleString()} {unit}
+
+      </span>
+
+    </div>
+
+  )
+}
+
+
+/* =========================================================
+   REVIEW ROW
+========================================================= */
+
+function ReviewRow({
+  label,
+  value,
+}) {
+
+  return (
+
+    <div className="
+      flex
+      items-center
+      justify-between
+      gap-4
+      p-3
+      rounded-lg
+      bg-[#E8F3FF]
+      dark:bg-slate-800
+    ">
+
+      <span className="text-sm text-slate-600 dark:text-slate-300">
+
+        {label}
+
+      </span>
+
+      <span className="
+        text-sm
+        font-bold
+        text-slate-900
+        dark:text-white
+      ">
+
+        {value}
+
+      </span>
+
+    </div>
+
+  )
+}
+
+
+/* =========================================================
+   SEVERITY BADGE
+========================================================= */
+
+function SeverityBadge({
+  severity,
+}) {
+
+  let style =
+    "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+
+
+  if (severity === "Critical") {
+
+    style =
+      "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400"
+
+  } else if (severity === "High") {
+
+    style =
+      "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400"
+
+  } else if (severity === "Medium") {
+
+    style =
+      "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400"
+
+  }
+
+
+  return (
+
+    <span
+      className={`
+        px-2
+        py-1
+        rounded-full
+        text-[10px]
+        font-semibold
+        whitespace-nowrap
+        shrink-0
+        ${style}
+      `}
+    >
+
+      {severity}
+
+    </span>
+
+  )
+}
+
 
 export default AIDemand
