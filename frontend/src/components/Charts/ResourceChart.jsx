@@ -16,12 +16,23 @@ const data = [
   { name: "Rescue", units: 1200 },
 ]
 
-
 function ResourceChart() {
   return (
-    <div className="w-full h-80">
+    <div
+      className="
+        w-full h-80
+        text-slate-500 dark:text-slate-400
+        [--tooltip-bg:white]
+        [--tooltip-text:#0f172a]
+        [--tooltip-border:#e2e8f0]
+        dark:[--tooltip-bg:#1e293b]
+        dark:[--tooltip-text:white]
+        dark:[--tooltip-border:#475569]
+      "
+    >
 
       <ResponsiveContainer width="100%" height="100%">
+
         <BarChart
           data={data}
           margin={{
@@ -34,6 +45,8 @@ function ResourceChart() {
 
           {/* Grid */}
           <CartesianGrid
+            stroke="currentColor"
+            strokeOpacity={0.15}
             strokeDasharray="3 3"
             vertical={false}
           />
@@ -41,14 +54,20 @@ function ResourceChart() {
           {/* X Axis */}
           <XAxis
             dataKey="name"
-            tick={{ fontSize: 14 }}
+            tick={{
+              fontSize: 14,
+              fill: "currentColor",
+            }}
             axisLine={false}
             tickLine={false}
           />
 
           {/* Y Axis */}
           <YAxis
-            tick={{ fontSize: 13 }}
+            tick={{
+              fontSize: 13,
+              fill: "currentColor",
+            }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(value) =>
@@ -63,6 +82,12 @@ function ResourceChart() {
               "Demand",
             ]}
             cursor={{ fill: "rgba(37, 99, 235, 0.05)" }}
+            contentStyle={{
+              backgroundColor: "var(--tooltip-bg)",
+              color: "var(--tooltip-text)",
+              border: "1px solid var(--tooltip-border)",
+              borderRadius: "8px",
+            }}
           />
 
           {/* Bars */}
@@ -74,6 +99,7 @@ function ResourceChart() {
           />
 
         </BarChart>
+
       </ResponsiveContainer>
 
     </div>
