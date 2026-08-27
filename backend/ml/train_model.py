@@ -56,8 +56,6 @@ targets = [
 categorical_features = ["disaster_type"]
 
 numeric_features = features
-
-
 preprocessor = ColumnTransformer(
     transformers=[
         (
@@ -72,11 +70,7 @@ preprocessor = ColumnTransformer(
         ),
     ]
 )
-
-
 # 5. Create model directory
-
-
 MODEL_DIR = "ml/models"
 
 os.makedirs(MODEL_DIR, exist_ok=True)
@@ -147,6 +141,7 @@ for target in targets:
   
     # Save model and preprocessor
     
+
 
     model_path = f"{MODEL_DIR}/{target}_model.joblib"
 
