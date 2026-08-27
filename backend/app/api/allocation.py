@@ -6,6 +6,9 @@ from app.models.allocation import Allocation
 from app.services.resource_allocation_service import (
     allocate_resources
 )
+from app.services.optimization_service import (
+    optimize_resource_allocation
+)
 
 from app.services.allocation_service import (
     create_allocation_requests,
@@ -18,6 +21,13 @@ router = APIRouter(
     prefix="/allocation",
     tags=["Allocation"]
 )
+
+
+# ==================================================
+# MODULE 1 — OR-TOOLS OPTIMIZATION
+# ==================================================
+
+
 
 @router.get("/history")
 def allocation_history(
@@ -34,6 +44,24 @@ def allocation_history(
         "total": len(allocations),
         "allocations": allocations
     }
+
+@router.get("/optimize")
+def optimize_allocation(
+    db: Session = Depends(get_db)
+):
+
+    try:
+
+        return optimize_resource_allocation(
+            db
+        )
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 
 @router.get("/{zone_id}")
@@ -152,18 +180,3 @@ def complete_request(
         "allocation": result
     }
 
-@router.get("/history")
-def allocation_history(
-    db: Session = Depends(get_db)
-):
-
-    allocations = (
-        db.query(Allocation)
-        .order_by(Allocation.created_at.desc())
-        .all()
-    )
-
-    return {
-        "total": len(allocations),
-        "allocations": allocations
-    }

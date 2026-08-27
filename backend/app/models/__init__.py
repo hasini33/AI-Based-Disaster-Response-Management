@@ -9,3 +9,6 @@ from .resource import Resource
 from app.models.severity import Severity
 from .zone import Zone
 from .field_operation import FieldOperation
+from app.models.depot import Depot
+from app.models.road import Road
+from app.models.vehicle import Vehicle

@@ -1,12 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException
+)
+
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.models.disaster import Disaster
 
 from app.services.satellite_service import (
-    get_satellite_imagery,
-    calculate_earthquake_extent
+    assess_satellite_damage
 )
 
 
@@ -24,7 +28,9 @@ def satellite(
 
     disaster = (
         db.query(Disaster)
-        .filter(Disaster.id == disaster_id)
+        .filter(
+            Disaster.id == disaster_id
+        )
         .first()
     )
 
@@ -34,25 +40,27 @@ def satellite(
             detail="Disaster not found"
         )
 
-    if disaster.latitude is None or disaster.longitude is None:
+    if (
+        disaster.latitude is None
+        or disaster.longitude is None
+    ):
         raise HTTPException(
             status_code=400,
             detail="Disaster coordinates are not available"
         )
 
-    # Get satellite imagery
-    satellite_data = get_satellite_imagery(
-        float(disaster.latitude),
-        float(disaster.longitude)
-    )
-
-    # Create estimated impact extent
-    magnitude = float(disaster.severity or 0)
-
-    extent = calculate_earthquake_extent(
-        float(disaster.latitude),
-        float(disaster.longitude),
-        magnitude
+    result = assess_satellite_damage(
+        latitude=float(
+            disaster.latitude
+        ),
+        longitude=float(
+            disaster.longitude
+        ),
+        disaster_type=disaster.disaster_type,
+        severity=float(
+            disaster.severity or 0
+        ),
+        disaster_date=disaster.event_date
     )
 
     return {
@@ -61,11 +69,5 @@ def satellite(
         "latitude": disaster.latitude,
         "longitude": disaster.longitude,
         "severity": disaster.severity,
-
-        "impact_extent": {
-            "radius_km": extent["radius_km"],
-            "geometry": extent["geometry"]
-        },
-
-        "satellite": satellite_data
+        **result
     }

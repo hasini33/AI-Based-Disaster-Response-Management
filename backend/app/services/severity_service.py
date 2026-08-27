@@ -1,29 +1,27 @@
-def calculate_severity(magnitude, population, buildings):
+def calculate_severity(severity, population, buildings):
     """
-    Calculate severity score based on
-    earthquake magnitude,
-    population,
-    and building density.
+    Calculate disaster severity score using
+    disaster severity, population, and buildings.
     """
 
     # Normalize values to 0-100
-    magnitude_score = min(magnitude * 10, 100)
+    severity_score_input = min(severity / 5, 100)
     population_score = min(population / 10, 100)
     building_score = min(buildings, 100)
 
-    severity_score = (
-        0.4 * magnitude_score +
+    score = (
+        0.4 * severity_score_input +
         0.3 * population_score +
         0.3 * building_score
     )
 
-    if severity_score >= 75:
+    if score >= 75:
         level = "Very High"
-    elif severity_score >= 50:
+    elif score >= 50:
         level = "High"
-    elif severity_score >= 25:
+    elif score >= 25:
         level = "Medium"
     else:
         level = "Low"
 
-    return severity_score, level
+    return round(score, 2), level

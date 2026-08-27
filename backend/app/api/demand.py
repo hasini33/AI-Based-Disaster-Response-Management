@@ -75,7 +75,13 @@ def update_all_demands(
     damage_percent: float,
     db: Session = Depends(get_db)
 ):
+    if damage_percent < 0 or damage_percent > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="damage_percent must be between 0 and 100"
+        )
 
+   
     zones = db.query(Zone).all()
 
     if not zones:

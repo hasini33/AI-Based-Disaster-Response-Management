@@ -26,6 +26,11 @@ from app.db.database import engine
 from app.models import Base
 
 
+from app.api.disaster import router as get_india_disasters
+
+from app.api import routing
+
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -41,6 +46,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(
+    routing.router
+)
 
 # Core
 app.include_router(zone_router)
@@ -71,8 +79,11 @@ app.include_router(severity_router)
 app.include_router(field_operation.router)
 
 
+app.include_router(get_india_disasters,tags=["India"])
+
 @app.get("/")
 def home():
     return {
         "message": "Disaster Response API Running"
     }
+    

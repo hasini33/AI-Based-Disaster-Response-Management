@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float
+from sqlalchemy import Column, Integer, String, Float,DateTime
 from app.db.database import Base
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship
@@ -19,7 +19,7 @@ class Disaster(Base):
     longitude = Column(Float)
     
     location = Column(Geometry("POINT", srid=4326))
-
+    event_date = Column(DateTime, nullable=True)
     zone_id = Column(Integer, ForeignKey("zones.id"), nullable=True)
     zone = relationship(
     "Zone",

@@ -97,11 +97,11 @@ async def fetch_ndma():
                         namespaces=CAP_NAMESPACE
                     )
 
-                country = extract_state(area_desc)
+                country = "India"
 
                 disaster = Disaster(
                     disaster_type=event,
-                    country=country,
+                    country="India",
                     alert_level="NDMA",
                     severity=0,
                     latitude=None,
