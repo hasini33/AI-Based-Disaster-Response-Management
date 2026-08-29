@@ -1,5 +1,4 @@
 from sqlalchemy.orm import Session
-
 from app.models.zone import Zone
 from app.models.disaster import Disaster
 
@@ -8,103 +7,72 @@ from app.models.disaster import Disaster
 # BASIC HELPERS
 # ============================================================
 
-def clamp(
-    value,
-    minimum=0.0,
-    maximum=100.0
-):
-    """
-    Keep a value between minimum and maximum.
-    """
-
+def clamp(value, minimum=0.0, maximum=100.0):
     try:
         value = float(value)
     except (TypeError, ValueError):
         value = 0.0
 
-    return max(
-        minimum,
-        min(value, maximum)
-    )
+    return max(minimum, min(value, maximum))
 
 
 # ============================================================
 # DISASTER SEVERITY NORMALIZATION
 # ============================================================
 
-def normalize_disaster_severity(
-    disaster: Disaster
-):
+def normalize_disaster_severity(disaster: Disaster):
     """
-    Convert different disaster severity formats
-    into a common 0-100 severity score.
+    Convert disaster severity into a 0-100 PRIORITY score.
 
-    GDACS severity values are not consistent across
-    disaster types.
+    IMPORTANT:
+    This is NOT physical damage percentage.
 
-    Examples:
-
-        Earthquake 5.0  -> moderate
-        Earthquake 7.5  -> very high
-
-        Cyclone 316     -> high
-
-        Wildfire 47910  -> high
+    Disaster severity and satellite damage are two different
+    concepts.
     """
 
-    severity = float(
-        disaster.severity or 0
-    )
+    severity = float(disaster.severity or 0)
 
     disaster_type = (
         disaster.disaster_type or ""
     ).strip().upper()
 
     # --------------------------------------------------------
-    # Earthquake
+    # EARTHQUAKE
     # --------------------------------------------------------
 
-    if disaster_type in [
-        "EARTHQUAKE",
-        "EQ"
-    ]:
+    if disaster_type in ["EARTHQUAKE", "EQ"]:
 
-        # Richter/Magnitude style
         score = (
-            (severity - 4.0)
-            / 4.0
+            (severity - 4.0) / 4.0
         ) * 100
 
         return clamp(score)
 
     # --------------------------------------------------------
-    # Flood
+    # FLOOD
     # --------------------------------------------------------
 
-    if disaster_type in [
-        "FLOOD",
-        "FL"
-    ]:
+    if disaster_type in ["FLOOD", "FL"]:
 
-        # Some GDACS flood records have 0 severity.
-        # If severity exists, treat it as an already
-        # normalized value.
-        return clamp(severity)
+        if severity <= 0:
+            return 0.0
 
-    # --------------------------------------------------------
-    # Cyclone
-    # --------------------------------------------------------
-
-    if disaster_type in [
-        "CYCLONE",
-        "TC"
-    ]:
-
-        # GDACS cyclone severity values can be
-        # much larger than 100.
+        # Flood severity can be much larger than 100.
+        # Convert it to a 0-100 PRIORITY score.
         #
-        # Use a logarithmic scale so that extremely
-        # large values do not immediately become 100.
+        # This does NOT represent physical damage.
+        score = (
+            severity / 200.0
+        ) * 100
+
+        return clamp(score)
+
+    # --------------------------------------------------------
+    # CYCLONE
+    # --------------------------------------------------------
+
+    if disaster_type in ["CYCLONE", "TC"]:
 
         if severity <= 0:
             return 0.0
@@ -116,18 +84,10 @@ def normalize_disaster_severity(
         return clamp(score)
 
     # --------------------------------------------------------
-    # Wildfire
+    # WILDFIRE
     # --------------------------------------------------------
 
-    if disaster_type in [
-        "WILDFIRE",
-        "WF"
-    ]:
-
-        # Wildfire severity values can represent
-        # affected area / burned area.
-        #
-        # Convert using a logarithmic scale.
+    if disaster_type in ["WILDFIRE", "WF"]:
 
         if severity <= 0:
             return 0.0
@@ -142,31 +102,39 @@ def normalize_disaster_severity(
         return clamp(score)
 
     # --------------------------------------------------------
-    # Volcano
+    # VOLCANO
     # --------------------------------------------------------
 
-    if disaster_type in [
-        "VOLCANO",
-        "VO"
-    ]:
+    if disaster_type in ["VOLCANO", "VO"]:
 
-        return clamp(severity)
+        if severity <= 0:
+            return 0.0
+
+        score = (
+            severity / 10.0
+        ) * 100
+
+        return clamp(score)
 
     # --------------------------------------------------------
-    # Landslide / Storm / Lightning etc.
+    # OTHER DISASTERS
     # --------------------------------------------------------
 
     if disaster_type in [
         "LANDSLIDE",
         "STORM",
-        "LIGHTNING"
+        "LIGHTNING",
+        "TSUNAMI"
     ]:
 
-        return clamp(severity)
+        if severity <= 0:
+            return 0.0
 
-    # --------------------------------------------------------
-    # Unknown disaster type
-    # --------------------------------------------------------
+        score = (
+            severity / 100.0
+        ) * 100
+
+        return clamp(score)
 
     return clamp(severity)
 
@@ -175,18 +143,7 @@ def normalize_disaster_severity(
 # DISASTER TYPE WEIGHT
 # ============================================================
 
-def get_disaster_type_weight(
-    disaster_type
-):
-    """
-    Disaster type adjustment.
-
-    Severity remains the primary factor.
-
-    Currently all disaster types use neutral weighting
-    so that the model does not artificially increase
-    one disaster type over another.
-    """
+def get_disaster_type_weight(disaster_type):
 
     disaster_type = (
         (disaster_type or "")
@@ -227,17 +184,13 @@ def get_disaster_type_weight(
 
 
 # ============================================================
-# NORMALIZE POPULATION
+# POPULATION SCORE
 # ============================================================
 
 def calculate_population_score(
     db: Session,
     zone: Zone
 ):
-    """
-    Convert zone population into a 0-100
-    relative exposure score.
-    """
 
     max_population = (
         db.query(
@@ -272,17 +225,13 @@ def calculate_population_score(
 
 
 # ============================================================
-# NORMALIZE BUILDINGS
+# BUILDING SCORE
 # ============================================================
 
 def calculate_building_score(
     db: Session,
     zone: Zone
 ):
-    """
-    Convert building count into a 0-100
-    relative exposure score.
-    """
 
     max_buildings = (
         db.query(
@@ -317,6 +266,80 @@ def calculate_building_score(
 
 
 # ============================================================
+# AUTOMATIC DAMAGE CALCULATION
+# ============================================================
+
+def calculate_zone_damage(disasters):
+    """
+    Calculate zone damage percentage using
+    satellite-derived damage when available.
+
+    If satellite damage is unavailable,
+    fall back to normalized disaster severity.
+    """
+
+    if not disasters:
+        return 0.0
+
+    damage_scores = []
+
+    for disaster in disasters:
+
+        # --------------------------------------------------
+        # PRIMARY SOURCE:
+        # Satellite-derived physical damage
+        # --------------------------------------------------
+
+        satellite_damage = getattr(
+            disaster,
+            "satellite_damage_percent",
+            None
+        )
+
+        if satellite_damage is not None:
+
+            damage = clamp(
+                satellite_damage
+            )
+
+        # --------------------------------------------------
+        # FALLBACK:
+        # Disaster severity
+        # --------------------------------------------------
+
+        else:
+
+            severity_score = (
+                normalize_disaster_severity(
+                    disaster
+                )
+            )
+
+            type_weight = (
+                get_disaster_type_weight(
+                    disaster.disaster_type
+                )
+            )
+
+            damage = clamp(
+                severity_score * type_weight
+            )
+
+        damage_scores.append(
+            damage
+        )
+
+    if not damage_scores:
+        return 0.0
+
+    # Strongest actual damage in the zone
+    return round(
+        max(damage_scores),
+        2
+    )
+
+
+# ============================================================
 # UPDATE ZONE SEVERITY
 # ============================================================
 
@@ -325,24 +348,9 @@ def update_zone_severity(
     disaster: Disaster,
     zone: Zone
 ):
-    """
-    Calculate and update the severity score of a zone.
-
-    Formula:
-
-        Disaster Impact = 50%
-        Damage          = 25%
-        Population      = 15%
-        Buildings       = 10%
-
-    If there are no disasters assigned to the zone,
-    the disaster component becomes 0.
-
-    Final score is always between 0 and 100.
-    """
 
     # --------------------------------------------------------
-    # 1. Get disasters assigned to this zone
+    # 1. Get all disasters assigned to zone
     # --------------------------------------------------------
 
     disasters = (
@@ -362,7 +370,17 @@ def update_zone_severity(
     )
 
     # --------------------------------------------------------
-    # 3. Calculate disaster impact
+    # 3. PHYSICAL DAMAGE
+    # --------------------------------------------------------
+
+    zone.damage_percent = (
+        calculate_zone_damage(
+            disasters
+        )
+    )
+
+    # --------------------------------------------------------
+    # 4. DISASTER PRIORITY / INTENSITY
     # --------------------------------------------------------
 
     disaster_score = 0.0
@@ -386,31 +404,29 @@ def update_zone_severity(
             )
 
             adjusted_score = clamp(
-                base_score
-                * type_weight
+                base_score * type_weight
             )
 
             disaster_scores.append(
                 adjusted_score
             )
 
-        # Strongest disaster determines
-        # the primary disaster impact.
+        if disaster_scores:
 
-        disaster_score = max(
-            disaster_scores
-        )
+            disaster_score = max(
+                disaster_scores
+            )
 
     # --------------------------------------------------------
-    # 4. Damage score
+    # 5. DAMAGE SCORE
     # --------------------------------------------------------
 
     damage_score = clamp(
-        zone.damage_percent or 0
+        zone.damage_percent
     )
 
     # --------------------------------------------------------
-    # 5. Population exposure
+    # 6. POPULATION EXPOSURE
     # --------------------------------------------------------
 
     population_score = (
@@ -421,7 +437,7 @@ def update_zone_severity(
     )
 
     # --------------------------------------------------------
-    # 6. Building exposure
+    # 7. BUILDING EXPOSURE
     # --------------------------------------------------------
 
     building_score = (
@@ -432,7 +448,21 @@ def update_zone_severity(
     )
 
     # --------------------------------------------------------
-    # 7. Calculate final severity
+    # 8. FINAL SEVERITY
+    # --------------------------------------------------------
+    #
+    # Disaster intensity:
+    #     50%
+    #
+    # Physical damage:
+    #     25%
+    #
+    # Population exposure:
+    #     15%
+    #
+    # Building exposure:
+    #     10%
+    #
     # --------------------------------------------------------
 
     severity_score = (
@@ -447,7 +477,7 @@ def update_zone_severity(
     )
 
     # --------------------------------------------------------
-    # 8. Clamp final score
+    # 9. SAVE
     # --------------------------------------------------------
 
     zone.severity_score = round(
@@ -455,14 +485,8 @@ def update_zone_severity(
         2
     )
 
-    # --------------------------------------------------------
-    # 9. Save changes
-    # --------------------------------------------------------
-
     db.commit()
 
-    db.refresh(
-        zone
-    )
+    db.refresh(zone)
 
     return zone

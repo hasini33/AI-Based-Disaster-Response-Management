@@ -1,0 +1,2258 @@
+from math import radians, sin, cos, sqrt, atan2
+from heapq import heappush, heappop
+
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+
+from ortools.constraint_solver import (
+    pywrapcp,
+    routing_enums_pb2
+)
+
+from app.models.zone import Zone
+from app.models.vehicle import Vehicle
+from app.models.road import Road
+
+from app.services.demand_prediction_service import (
+    predict_zone_demand
+)
+
+# CONSTANTS
+EARTH_RADIUS_KM = 6371.0
+
+AVERAGE_SPEED_KMPH = 40.0
+
+DELIVERY_CHUNK_SIZE = 500.0
+
+UNREACHABLE_DISTANCE_KM = 100000.0
+
+DISTANCE_SCALE = 1000
+
+# HAVERSINE DISTANCE
+
+def haversine_distance(
+    lat1,
+    lon1,
+    lat2,
+    lon2
+):
+
+    d_lat = radians(
+        lat2 - lat1
+    )
+
+    d_lon = radians(
+        lon2 - lon1
+    )
+
+    a = (
+        sin(d_lat / 2) ** 2
+        +
+        cos(radians(lat1))
+        * cos(radians(lat2))
+        * sin(d_lon / 2) ** 2
+    )
+
+    c = 2 * atan2(
+        sqrt(a),
+        sqrt(1 - a)
+    )
+
+    return EARTH_RADIUS_KM * c
+
+# ZONE COORDINATES
+
+def get_zone_coordinates(
+    db: Session,
+    zone
+):
+
+    result = db.execute(
+        text(
+            """
+            SELECT
+                ST_Y(ST_Centroid(geometry)),
+                ST_X(ST_Centroid(geometry))
+            FROM zones
+            WHERE id = :zone_id
+            """
+        ),
+        {
+            "zone_id": zone.id
+        }
+    ).fetchone()
+
+    if not result:
+        return None
+
+    if result[0] is None or result[1] is None:
+        return None
+
+    return {
+        "latitude": float(result[0]),
+        "longitude": float(result[1])
+    }
+
+# CALCULATE ZONE DEMAND
+
+
+def calculate_zone_load(
+    db: Session,
+    zone_id: int
+):
+
+    prediction = predict_zone_demand(
+        db,
+        zone_id
+    )
+
+    if not prediction:
+        return 0.0
+
+    predicted_demand = prediction.get(
+        "predicted_demand",
+        {}
+    )
+
+    if not isinstance(
+        predicted_demand,
+        dict
+    ):
+
+        try:
+
+            return round(
+                float(predicted_demand),
+                2
+            )
+
+        except (
+            TypeError,
+            ValueError
+        ):
+
+            return 0.0
+
+    total = 0.0
+
+    for value in predicted_demand.values():
+
+        if isinstance(value, dict):
+
+            try:
+
+                total += float(
+                    value.get(
+                        "predicted",
+                        0
+                    )
+                )
+
+            except (
+                TypeError,
+                ValueError
+            ):
+
+                continue
+
+        else:
+
+            try:
+
+                total += float(value)
+
+            except (
+                TypeError,
+                ValueError
+            ):
+
+                continue
+
+    return round(
+        total,
+        2
+    )
+# BUILD OPEN ROAD GRAPH
+def build_road_graph(
+    db: Session
+):
+
+    roads = (
+        db.query(Road)
+        .filter(
+            Road.status.ilike("Open")
+        )
+        .all()
+    )
+
+    graph = {}
+
+    for road in roads:
+
+        if (
+            road.start_latitude is None
+            or road.start_longitude is None
+            or road.end_latitude is None
+            or road.end_longitude is None
+        ):
+
+            continue
+
+        start = (
+            round(
+                float(
+                    road.start_latitude
+                ),
+                6
+            ),
+            round(
+                float(
+                    road.start_longitude
+                ),
+                6
+            )
+        )
+
+        end = (
+            round(
+                float(
+                    road.end_latitude
+                ),
+                6
+            ),
+            round(
+                float(
+                    road.end_longitude
+                ),
+                6
+            )
+        )
+
+        try:
+
+            edge_distance = float(
+                road.distance_km
+            )
+
+        except (
+            TypeError,
+            ValueError
+        ):
+
+            continue
+
+        if edge_distance < 0:
+            continue
+
+        graph.setdefault(
+            start,
+            []
+        )
+
+        graph.setdefault(
+            end,
+            []
+        )
+
+        # Roads are bidirectional.
+        graph[start].append(
+            (
+                end,
+                edge_distance
+            )
+        )
+
+        graph[end].append(
+            (
+                start,
+                edge_distance
+            )
+        )
+
+    return graph
+
+# SHORTEST PATH
+def shortest_path(
+    graph,
+    start,
+    destination
+):
+
+    if start is None or destination is None:
+        return None
+
+    if start == destination:
+
+        return {
+            "distance_km": 0.0,
+            "path": [start]
+        }
+
+    if start not in graph:
+        return None
+
+    if destination not in graph:
+        return None
+
+    distances = {
+        start: 0.0
+    }
+
+    previous = {}
+
+    queue = []
+
+    heappush(
+        queue,
+        (
+            0.0,
+            start
+        )
+    )
+
+    visited = set()
+
+    while queue:
+
+        current_distance, current = heappop(
+            queue
+        )
+
+        if current in visited:
+            continue
+
+        visited.add(
+            current
+        )
+
+        if current == destination:
+            break
+
+        for neighbour, edge_distance in graph.get(
+            current,
+            []
+        ):
+
+            if neighbour in visited:
+                continue
+
+            new_distance = (
+                current_distance
+                + edge_distance
+            )
+
+            if (
+                neighbour not in distances
+                or new_distance < distances[neighbour]
+            ):
+
+                distances[neighbour] = (
+                    new_distance
+                )
+
+                previous[neighbour] = current
+
+                heappush(
+                    queue,
+                    (
+                        new_distance,
+                        neighbour
+                    )
+                )
+
+    if destination not in distances:
+        return None
+
+    path = []
+
+    current = destination
+
+    while True:
+
+        path.append(
+            current
+        )
+
+        if current == start:
+            break
+
+        if current not in previous:
+            return None
+
+        current = previous[current]
+
+    path.reverse()
+
+    return {
+        "distance_km":
+            distances[destination],
+
+        "path":
+            path
+    }
+
+# BACKWARD COMPATIBLE DISTANCE FUNCTION
+def shortest_path_distance(
+    graph,
+    start,
+    destination
+):
+
+    result = shortest_path(
+        graph,
+        start,
+        destination
+    )
+
+    if result is None:
+        return None
+
+    return result["distance_km"]
+
+# FIND NEAREST ROAD NODE
+def nearest_graph_node(
+    graph,
+    latitude,
+    longitude
+):
+
+    if not graph:
+        return None
+
+    if latitude is None or longitude is None:
+        return None
+
+    best_node = None
+
+    best_distance = float(
+        "inf"
+    )
+
+    for node in graph.keys():
+
+        distance = haversine_distance(
+            float(latitude),
+            float(longitude),
+            node[0],
+            node[1]
+        )
+
+        if distance < best_distance:
+
+            best_distance = distance
+
+            best_node = node
+
+    return best_node
+
+# NODE TO COORDINATES
+def node_to_coordinates(
+    node
+):
+
+    if node is None:
+        return None
+
+    return {
+        "latitude": round(
+            float(node[0]),
+            6
+        ),
+
+        "longitude": round(
+            float(node[1]),
+            6
+        )
+    }
+# PATH TO COORDINATES
+def path_to_coordinates(
+    path
+):
+
+    return [
+        {
+            "latitude": round(
+                float(node[0]),
+                6
+            ),
+
+            "longitude": round(
+                float(node[1]),
+                6
+            )
+        }
+
+        for node in path
+    ]
+
+# TRAVEL TIME
+def calculate_travel_time(
+    distance_km
+):
+
+    if distance_km is None:
+        return 0.0
+
+    return round(
+        (
+            float(distance_km)
+            / AVERAGE_SPEED_KMPH
+        ) * 60,
+        1
+    )
+# EFFECTIVE PRIORITY
+#
+# IMPORTANT FIX
+#
+# severity is already on a 0-100 scale.
+#
+# priority_override is normally a small commander scale
+# such as 1-5.
+#
+# We therefore DO NOT compare:
+#
+# severity = 94
+#
+# against:
+#
+# priority_override = 5
+#
+# as if both were the same scale.
+#
+# Instead the commander override provides a controlled
+# boost to the severity score.
+def calculate_effective_priority(
+    severity,
+    priority_override
+):
+
+    try:
+        severity = float(
+            severity or 0
+        )
+    except (
+        TypeError,
+        ValueError
+    ):
+        severity = 0.0
+
+    severity = max(
+        0.0,
+        min(
+            severity,
+            100.0
+        )
+    )
+
+    if priority_override is None:
+
+        return severity
+
+    try:
+
+        override = float(
+            priority_override
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        return severity
+
+    # --------------------------------------------------------
+    # Commander priority is treated as a 1-5 scale.
+    #
+    # 1 = small boost
+    # 5 = strongest boost
+    #
+    # Maximum boost = 15 points.
+    # --------------------------------------------------------
+
+    override = max(
+        0.0,
+        min(
+            override,
+            5.0
+        )
+    )
+
+    boost = (
+        override
+        / 5.0
+    ) * 15.0
+
+    return min(
+        severity + boost,
+        100.0
+    )
+
+# FIND VEHICLE → ZONE ROUTE
+def find_vehicle_zone_route(
+    graph,
+    vehicle_latitude,
+    vehicle_longitude,
+    zone_latitude,
+    zone_longitude
+):
+
+    vehicle_node = nearest_graph_node(
+        graph,
+        vehicle_latitude,
+        vehicle_longitude
+    )
+
+    zone_node = nearest_graph_node(
+        graph,
+        zone_latitude,
+        zone_longitude
+    )
+
+    if vehicle_node is None:
+
+        return {
+            "route_available": False,
+            "route_status": "Blocked",
+            "route_reason": (
+                "Vehicle is not connected "
+                "to the open-road network."
+            ),
+            "nearest_open_road_node": None,
+            "zone_road_node": None,
+            "distance_km": None,
+            "route_path": []
+        }
+
+    if zone_node is None:
+
+        return {
+            "route_available": False,
+            "route_status": "Blocked",
+            "route_reason": (
+                "Zone is not connected "
+                "to the open-road network."
+            ),
+            "nearest_open_road_node":
+                node_to_coordinates(
+                    vehicle_node
+                ),
+            "zone_road_node": None,
+            "distance_km": None,
+            "route_path": []
+        }
+
+    route = shortest_path(
+        graph,
+        vehicle_node,
+        zone_node
+    )
+
+    if route is None:
+
+        return {
+            "route_available": False,
+            "route_status": "Blocked",
+            "route_reason": (
+                "No route exists through "
+                "open roads."
+            ),
+            "nearest_open_road_node":
+                node_to_coordinates(
+                    vehicle_node
+                ),
+            "zone_road_node":
+                node_to_coordinates(
+                    zone_node
+                ),
+            "distance_km": None,
+            "route_path": []
+        }
+
+    route_path = path_to_coordinates(
+        route["path"]
+    )
+
+    # --------------------------------------------------------
+    # Exact vehicle location.
+    # --------------------------------------------------------
+
+    if (
+        vehicle_latitude is not None
+        and vehicle_longitude is not None
+    ):
+
+        exact_vehicle_point = {
+            "latitude": round(
+                float(vehicle_latitude),
+                6
+            ),
+
+            "longitude": round(
+                float(vehicle_longitude),
+                6
+            )
+        }
+
+        if route_path:
+
+            first = route_path[0]
+
+            if (
+                first["latitude"]
+                != exact_vehicle_point["latitude"]
+                or
+                first["longitude"]
+                != exact_vehicle_point["longitude"]
+            ):
+
+                route_path.insert(
+                    0,
+                    exact_vehicle_point
+                )
+
+    # --------------------------------------------------------
+    # Exact zone location.
+    # --------------------------------------------------------
+
+    exact_zone_point = {
+        "latitude": round(
+            float(zone_latitude),
+            6
+        ),
+
+        "longitude": round(
+            float(zone_longitude),
+            6
+        )
+    }
+
+    if route_path:
+
+        last = route_path[-1]
+
+        if (
+            last["latitude"]
+            != exact_zone_point["latitude"]
+            or
+            last["longitude"]
+            != exact_zone_point["longitude"]
+        ):
+
+            route_path.append(
+                exact_zone_point
+            )
+
+    return {
+        "route_available": True,
+        "route_status": "Available",
+        "route_reason": (
+            "Route found through open roads."
+        ),
+        "nearest_open_road_node":
+            node_to_coordinates(
+                vehicle_node
+            ),
+        "zone_road_node":
+            node_to_coordinates(
+                zone_node
+            ),
+        "distance_km":
+            round(
+                float(
+                    route["distance_km"]
+                ),
+                2
+            ),
+        "route_path":
+            route_path
+    }
+
+# MAIN OPTIMIZATION
+def optimize_vehicle_routes(
+    db: Session
+):
+    # 1. AVAILABLE VEHICLES
+    vehicles = (
+        db.query(Vehicle)
+        .filter(
+            Vehicle.status.ilike("Available")
+        )
+        .all()
+    )
+
+    if not vehicles:
+
+        return {
+            "status": "failed",
+            "message": (
+                "No available vehicles found"
+            )
+        }
+    # 2. ZONES
+    zones = (
+        db.query(Zone)
+        .order_by(
+            Zone.severity_score.desc()
+        )
+        .all()
+    )
+
+    if not zones:
+
+        return {
+            "status": "failed",
+            "message": "No zones found"
+        }
+    # 3. OPEN ROAD GRAPH
+    graph = build_road_graph(
+        db
+    )
+
+    if not graph:
+
+        return {
+            "status": "failed",
+            "message": "No open roads found"
+        }
+    # 4. PREPARE VEHICLES
+    vehicle_nodes = []
+
+    vehicle_starts = []
+
+    for vehicle in vehicles:
+
+        if (
+            vehicle.latitude is None
+            or vehicle.longitude is None
+        ):
+
+            vehicle_nodes.append(
+                None
+            )
+
+            vehicle_starts.append(
+                {
+                    "vehicle_id":
+                        vehicle.id,
+
+                    "vehicle_name":
+                        vehicle.vehicle_name,
+
+                    "latitude":
+                        None,
+
+                    "longitude":
+                        None,
+
+                    "nearest_road_node":
+                        None,
+
+                    "route_status":
+                        "Blocked",
+
+                    "reason":
+                        (
+                            "Vehicle has no valid "
+                            "latitude/longitude."
+                        )
+                }
+            )
+
+            continue
+
+        latitude = float(
+            vehicle.latitude
+        )
+
+        longitude = float(
+            vehicle.longitude
+        )
+
+        node = nearest_graph_node(
+            graph,
+            latitude,
+            longitude
+        )
+
+        vehicle_nodes.append(
+            node
+        )
+
+        if node is None:
+
+            vehicle_starts.append(
+                {
+                    "vehicle_id":
+                        vehicle.id,
+
+                    "vehicle_name":
+                        vehicle.vehicle_name,
+
+                    "latitude":
+                        latitude,
+
+                    "longitude":
+                        longitude,
+
+                    "nearest_road_node":
+                        None,
+
+                    "route_status":
+                        "Blocked",
+
+                    "reason":
+                        (
+                            "Vehicle is not connected "
+                            "to the open-road network."
+                        )
+                }
+            )
+
+        else:
+
+            vehicle_starts.append(
+                {
+                    "vehicle_id":
+                        vehicle.id,
+
+                    "vehicle_name":
+                        vehicle.vehicle_name,
+
+                    "latitude":
+                        latitude,
+
+                    "longitude":
+                        longitude,
+
+                    "nearest_road_node":
+                        node_to_coordinates(
+                            node
+                        ),
+
+                    "route_status":
+                        "Available",
+
+                    "reason":
+                        (
+                            "Vehicle is connected "
+                            "to the open-road network."
+                        )
+                }
+            )
+
+    # 5. PREPARE ZONE DATA
+    valid_zones = []
+
+    for zone in zones:
+
+        coordinates = get_zone_coordinates(
+            db,
+            zone
+        )
+
+        if not coordinates:
+            continue
+
+        nearest_node = nearest_graph_node(
+            graph,
+            coordinates["latitude"],
+            coordinates["longitude"]
+        )
+
+        if nearest_node is None:
+            continue
+
+        demand = calculate_zone_load(
+            db,
+            zone.id
+        )
+
+        if demand <= 0:
+            continue
+
+        severity = float(
+            zone.severity_score or 0
+        )
+
+        override = (
+            zone.priority_override
+            if zone.priority_override is not None
+            else None
+        )
+
+        effective_priority = (
+            calculate_effective_priority(
+                severity,
+                override
+            )
+        )
+
+        valid_zones.append(
+            {
+                "zone":
+                    zone,
+
+                "latitude":
+                    coordinates["latitude"],
+
+                "longitude":
+                    coordinates["longitude"],
+
+                "node":
+                    nearest_node,
+
+                "demand":
+                    float(demand),
+
+                "severity":
+                    severity,
+
+                "priority_override":
+                    override,
+
+                "effective_priority":
+                    effective_priority,
+
+                "priority_overridden":
+                    override is not None
+            }
+        )
+
+    if not valid_zones:
+
+        return {
+            "status": "failed",
+            "message": (
+                "No zones with valid demand found"
+            )
+        }
+    # 6. ONLY KEEP ZONES THAT HAVE AT LEAST ONE VEHICLE ROUTE
+    reachable_zones = []
+
+    blocked_zones = []
+
+    for zone_data in valid_zones:
+
+        has_route = False
+
+        for vehicle in vehicles:
+
+            if (
+                vehicle.latitude is None
+                or vehicle.longitude is None
+            ):
+                continue
+
+            route = find_vehicle_zone_route(
+                graph,
+                float(vehicle.latitude),
+                float(vehicle.longitude),
+                zone_data["latitude"],
+                zone_data["longitude"]
+            )
+
+            if route["route_available"]:
+
+                has_route = True
+
+                break
+
+        if has_route:
+
+            reachable_zones.append(
+                zone_data
+            )
+
+        else:
+
+            blocked_zones.append(
+                {
+                    "zone_id":
+                        zone_data["zone"].id,
+
+                    "zone_name":
+                        zone_data["zone"].zone_name,
+
+                    "severity":
+                        zone_data["severity"],
+
+                    "reason":
+                        (
+                            "No vehicle has an available "
+                            "route through open roads."
+                        )
+                }
+            )
+
+    if not reachable_zones:
+
+        return {
+            "status": "failed",
+            "message": (
+                "No demand zones are reachable "
+                "through open roads."
+            ),
+            "vehicle_starts":
+                vehicle_starts,
+            "blocked_zones":
+                blocked_zones
+        }
+
+    # 7. SORT ZONES BY EFFECTIVE PRIORITY
+    #
+    # This is the important allocation ordering.
+    #
+    # Zone D:
+    # severity 94.04
+    #
+    # Zone E:
+    # severity 67.38
+    # override 5
+    #
+    # Zone E becomes approximately 82.38,
+    # so Zone D remains first.
+
+    reachable_zones.sort(
+        key=lambda item: (
+            item["effective_priority"],
+            item["severity"]
+        ),
+        reverse=True
+    )
+
+    # 8. CREATE DELIVERY CHUNKS
+    delivery_units = []
+
+    for zone_data in reachable_zones:
+
+        remaining = float(
+            zone_data["demand"]
+        )
+
+        while remaining > 0:
+
+            chunk = min(
+                DELIVERY_CHUNK_SIZE,
+                remaining
+            )
+
+            delivery_units.append(
+                {
+                    "zone":
+                        zone_data["zone"],
+
+                    "zone_id":
+                        zone_data["zone"].id,
+
+                    "zone_name":
+                        zone_data["zone"].zone_name,
+
+                    "node":
+                        zone_data["node"],
+
+                    "latitude":
+                        zone_data["latitude"],
+
+                    "longitude":
+                        zone_data["longitude"],
+
+                    "severity":
+                        zone_data["severity"],
+
+                    "priority":
+                        zone_data[
+                            "effective_priority"
+                        ],
+
+                    "priority_override":
+                        zone_data[
+                            "priority_override"
+                        ],
+
+                    "priority_overridden":
+                        zone_data[
+                            "priority_overridden"
+                        ],
+
+                    "demand":
+                        chunk
+                }
+            )
+
+            remaining -= chunk
+
+    # 9. LOCATIONS
+    locations = []
+
+    vehicle_count = len(
+        vehicles
+    )
+
+    for node in vehicle_nodes:
+
+        if node is None:
+
+            locations.append(
+                (
+                    0.0,
+                    0.0
+                )
+            )
+
+        else:
+
+            locations.append(
+                node
+            )
+
+    for delivery in delivery_units:
+
+        locations.append(
+            delivery["node"]
+        )
+
+    delivery_start_index = (
+        vehicle_count
+    )
+
+    # 10. DISTANCE MATRIX
+
+    distance_matrix = []
+
+    for source in locations:
+
+        row = []
+
+        for destination in locations:
+
+            if source == (0.0, 0.0):
+
+                distance = (
+                    UNREACHABLE_DISTANCE_KM
+                )
+
+            else:
+
+                distance = shortest_path_distance(
+                    graph,
+                    source,
+                    destination
+                )
+
+                if distance is None:
+
+                    distance = (
+                        UNREACHABLE_DISTANCE_KM
+                    )
+
+            row.append(
+                int(
+                    round(
+                        distance
+                        * DISTANCE_SCALE
+                    )
+                )
+            )
+
+        distance_matrix.append(
+            row
+        )
+
+    # ========================================================
+    # 11. OR-TOOLS MANAGER
+    # ========================================================
+
+    start_indices = list(
+        range(vehicle_count)
+    )
+
+    end_indices = list(
+        range(vehicle_count)
+    )
+
+    manager = pywrapcp.RoutingIndexManager(
+        len(distance_matrix),
+        vehicle_count,
+        start_indices,
+        end_indices
+    )
+
+    routing = pywrapcp.RoutingModel(
+        manager
+    )
+
+    # ========================================================
+    # 12. DISTANCE CALLBACK
+    # ========================================================
+
+    def distance_callback(
+        from_index,
+        to_index
+    ):
+
+        from_node = manager.IndexToNode(
+            from_index
+        )
+
+        to_node = manager.IndexToNode(
+            to_index
+        )
+
+        return distance_matrix[
+            from_node
+        ][
+            to_node
+        ]
+
+    transit_callback_index = (
+        routing.RegisterTransitCallback(
+            distance_callback
+        )
+    )
+
+    routing.SetArcCostEvaluatorOfAllVehicles(
+        transit_callback_index
+    )
+
+    # ========================================================
+    # 13. CAPACITY CALLBACK
+    # ========================================================
+
+    demands = (
+        [0] * vehicle_count
+    )
+
+    for delivery in delivery_units:
+
+        demands.append(
+            int(
+                round(
+                    delivery["demand"]
+                )
+            )
+        )
+
+    def demand_callback(
+        from_index
+    ):
+
+        node = manager.IndexToNode(
+            from_index
+        )
+
+        return demands[node]
+
+    demand_callback_index = (
+        routing.RegisterUnaryTransitCallback(
+            demand_callback
+        )
+    )
+
+    vehicle_capacities = []
+
+    for vehicle in vehicles:
+
+        try:
+
+            capacity = int(
+                round(
+                    float(
+                        vehicle.capacity
+                    )
+                )
+            )
+
+        except (
+            TypeError,
+            ValueError
+        ):
+
+            capacity = 0
+
+        vehicle_capacities.append(
+            max(
+                capacity,
+                0
+            )
+        )
+
+    routing.AddDimensionWithVehicleCapacity(
+        demand_callback_index,
+        0,
+        vehicle_capacities,
+        True,
+        "Capacity"
+    )
+
+    # ========================================================
+    # 14. PRIORITY DISJUNCTIONS
+    #
+    # Higher effective priority receives a higher penalty
+    # when skipped.
+    #
+    # But distance still matters after priority.
+    # ========================================================
+
+    for i, delivery in enumerate(
+        delivery_units
+    ):
+
+        node_index = (
+            delivery_start_index
+            + i
+        )
+
+        routing_index = (
+            manager.NodeToIndex(
+                node_index
+            )
+        )
+
+        priority = float(
+            delivery.get(
+                "priority",
+                delivery["severity"]
+            )
+        )
+
+        # Priority is 0-100.
+        #
+        # Large enough to strongly prefer critical zones,
+        # but not so large that the solver becomes numerically
+        # distorted.
+        penalty = int(
+            10_000_000
+            + (
+                max(
+                    priority,
+                    0.0
+                )
+                * 100_000
+            )
+        )
+
+        routing.AddDisjunction(
+            [routing_index],
+            penalty
+        )
+
+    # ========================================================
+    # 15. SEARCH PARAMETERS
+    # ========================================================
+
+    search_parameters = (
+        pywrapcp.DefaultRoutingSearchParameters()
+    )
+
+    search_parameters.first_solution_strategy = (
+        routing_enums_pb2.FirstSolutionStrategy
+        .PATH_CHEAPEST_ARC
+    )
+
+    search_parameters.local_search_metaheuristic = (
+        routing_enums_pb2.LocalSearchMetaheuristic
+        .GUIDED_LOCAL_SEARCH
+    )
+
+    search_parameters.time_limit.seconds = 8
+
+    # ========================================================
+    # 16. SOLVE
+    # ========================================================
+
+    solution = routing.SolveWithParameters(
+        search_parameters
+    )
+
+    if not solution:
+
+        return {
+            "status": "failed",
+            "message": (
+                "OR-Tools could not find a solution"
+            )
+        }
+
+    # ========================================================
+    # 17. BUILD RESULTS
+    # ========================================================
+
+    optimized_routes = []
+
+    route_detail_map = {}
+
+    served_by_zone = {}
+
+    total_distance = 0.0
+
+    # ========================================================
+    # 18. PROCESS EACH VEHICLE
+    # ========================================================
+
+    for vehicle_index, vehicle in enumerate(
+        vehicles
+    ):
+
+        index = routing.Start(
+            vehicle_index
+        )
+
+        route_distance = 0.0
+
+        route_load = 0.0
+
+        zone_allocations = {}
+
+        while not routing.IsEnd(index):
+
+            node = manager.IndexToNode(
+                index
+            )
+
+            next_index = solution.Value(
+                routing.NextVar(index)
+            )
+
+            next_node = manager.IndexToNode(
+                next_index
+            )
+
+            edge_distance = (
+                distance_matrix[
+                    node
+                ][
+                    next_node
+                ]
+                / DISTANCE_SCALE
+            )
+
+            if edge_distance < (
+                UNREACHABLE_DISTANCE_KM
+            ):
+
+                route_distance += (
+                    edge_distance
+                )
+
+            # ------------------------------------------------
+            # DELIVERY NODE
+            # ------------------------------------------------
+
+            if node >= delivery_start_index:
+
+                position = (
+                    node
+                    - delivery_start_index
+                )
+
+                if (
+                    0
+                    <= position
+                    < len(delivery_units)
+                ):
+
+                    delivery = (
+                        delivery_units[
+                            position
+                        ]
+                    )
+
+                    zone_id = (
+                        delivery["zone_id"]
+                    )
+
+                    amount = float(
+                        delivery["demand"]
+                    )
+
+                    route_load += amount
+
+                    if zone_id not in zone_allocations:
+
+                        zone_allocations[
+                            zone_id
+                        ] = {
+                            "zone_id":
+                                zone_id,
+
+                            "zone_name":
+                                delivery[
+                                    "zone_name"
+                                ],
+
+                            "severity":
+                                delivery[
+                                    "severity"
+                                ],
+
+                            "priority":
+                                delivery[
+                                    "priority"
+                                ],
+
+                            "priority_override":
+                                delivery[
+                                    "priority_override"
+                                ],
+
+                            "priority_overridden":
+                                delivery[
+                                    "priority_overridden"
+                                ],
+
+                            "allocated":
+                                0.0,
+
+                            "latitude":
+                                delivery[
+                                    "latitude"
+                                ],
+
+                            "longitude":
+                                delivery[
+                                    "longitude"
+                                ]
+                        }
+
+                    zone_allocations[
+                        zone_id
+                    ]["allocated"] += amount
+
+                    served_by_zone[
+                        zone_id
+                    ] = (
+                        served_by_zone.get(
+                            zone_id,
+                            0.0
+                        )
+                        + amount
+                    )
+
+            index = next_index
+
+        # ====================================================
+        # VEHICLE COORDINATES
+        # ====================================================
+
+        if (
+            vehicle.latitude is not None
+            and vehicle.longitude is not None
+        ):
+
+            vehicle_latitude = float(
+                vehicle.latitude
+            )
+
+            vehicle_longitude = float(
+                vehicle.longitude
+            )
+
+        else:
+
+            vehicle_latitude = None
+
+            vehicle_longitude = None
+
+        vehicle_node = (
+            vehicle_nodes[
+                vehicle_index
+            ]
+        )
+
+        vehicle_route_available = (
+            vehicle_node is not None
+        )
+
+        # ====================================================
+        # VEHICLE ZONES
+        # ====================================================
+
+        zones_for_vehicle = []
+
+        for allocation in (
+            zone_allocations.values()
+        ):
+
+            if (
+                vehicle_latitude is not None
+                and vehicle_longitude is not None
+            ):
+
+                route_info = (
+                    find_vehicle_zone_route(
+                        graph,
+                        vehicle_latitude,
+                        vehicle_longitude,
+                        allocation[
+                            "latitude"
+                        ],
+                        allocation[
+                            "longitude"
+                        ]
+                    )
+                )
+
+            else:
+
+                route_info = {
+                    "route_available":
+                        False,
+
+                    "route_status":
+                        "Blocked",
+
+                    "route_reason":
+                        (
+                            "Vehicle has no valid "
+                            "coordinates."
+                        ),
+
+                    "nearest_open_road_node":
+                        None,
+
+                    "zone_road_node":
+                        None,
+
+                    "distance_km":
+                        None,
+
+                    "route_path":
+                        []
+                }
+
+            zones_for_vehicle.append(
+                {
+                    "zone_id":
+                        allocation[
+                            "zone_id"
+                        ],
+
+                    "zone_name":
+                        allocation[
+                            "zone_name"
+                        ],
+
+                    "severity":
+                        allocation[
+                            "severity"
+                        ],
+
+                    "priority":
+                        allocation[
+                            "priority"
+                        ],
+
+                    "priority_override":
+                        allocation[
+                            "priority_override"
+                        ],
+
+                    "priority_overridden":
+                        allocation[
+                            "priority_overridden"
+                        ],
+
+                    "allocated":
+                        round(
+                            allocation[
+                                "allocated"
+                            ],
+                            2
+                        ),
+
+                    "latitude":
+                        allocation[
+                            "latitude"
+                        ],
+
+                    "longitude":
+                        allocation[
+                            "longitude"
+                        ],
+
+                    "route_status":
+                        route_info[
+                            "route_status"
+                        ],
+
+                    "route_available":
+                        route_info[
+                            "route_available"
+                        ]
+                }
+            )
+
+            # =================================================
+            # ROUTE DETAIL
+            # =================================================
+
+            detail_key = (
+                vehicle.id,
+                allocation["zone_id"]
+            )
+
+            route_detail_map[
+                detail_key
+            ] = {
+                "vehicle_id":
+                    vehicle.id,
+
+                "vehicle_name":
+                    vehicle.vehicle_name,
+
+                "zone_id":
+                    allocation[
+                        "zone_id"
+                    ],
+
+                "zone_name":
+                    allocation[
+                        "zone_name"
+                    ],
+
+                "allocated":
+                    round(
+                        allocation[
+                            "allocated"
+                        ],
+                        2
+                    ),
+
+                "from": {
+                    "type":
+                        "Vehicle / Depot",
+
+                    "name":
+                        vehicle.vehicle_name,
+
+                    "latitude":
+                        vehicle_latitude,
+
+                    "longitude":
+                        vehicle_longitude
+                },
+
+                "nearest_open_road_node":
+                    route_info[
+                        "nearest_open_road_node"
+                    ],
+
+                "to": {
+                    "type":
+                        "Zone",
+
+                    "name":
+                        allocation[
+                            "zone_name"
+                        ],
+
+                    "latitude":
+                        allocation[
+                            "latitude"
+                        ],
+
+                    "longitude":
+                        allocation[
+                            "longitude"
+                        ]
+                },
+
+                "route_status":
+                    route_info[
+                        "route_status"
+                    ],
+
+                "route_available":
+                    route_info[
+                        "route_available"
+                    ],
+
+                "route_reason":
+                    route_info[
+                        "route_reason"
+                    ],
+
+                "distance_km":
+                    route_info[
+                        "distance_km"
+                    ],
+
+                "travel_time_minutes":
+                    (
+                        calculate_travel_time(
+                            route_info[
+                                "distance_km"
+                            ]
+                        )
+                        if route_info[
+                            "distance_km"
+                        ] is not None
+                        else None
+                    ),
+
+                "route_path":
+                    route_info[
+                        "route_path"
+                    ]
+            }
+
+        # ====================================================
+        # VEHICLE CAPACITY
+        # ====================================================
+
+        try:
+
+            vehicle_capacity = float(
+                vehicle.capacity
+            )
+
+        except (
+            TypeError,
+            ValueError
+        ):
+
+            vehicle_capacity = 0.0
+
+        optimized_routes.append(
+            {
+                "vehicle_id":
+                    vehicle.id,
+
+                "vehicle_name":
+                    vehicle.vehicle_name,
+
+                "vehicle_type":
+                    vehicle.vehicle_type,
+
+                "capacity":
+                    vehicle.capacity,
+
+                "load":
+                    round(
+                        route_load,
+                        2
+                    ),
+
+                "remaining_capacity":
+                    round(
+                        max(
+                            vehicle_capacity
+                            - route_load,
+                            0.0
+                        ),
+                        2
+                    ),
+
+                "from": {
+                    "type":
+                        "Vehicle / Depot",
+
+                    "name":
+                        vehicle.vehicle_name,
+
+                    "latitude":
+                        vehicle_latitude,
+
+                    "longitude":
+                        vehicle_longitude
+                },
+
+                "route_status":
+                    (
+                        "Available"
+                        if vehicle_route_available
+                        else "Blocked"
+                    ),
+
+                "route_available":
+                    vehicle_route_available,
+
+                "distance_km":
+                    round(
+                        route_distance,
+                        2
+                    ),
+
+                "travel_time_minutes":
+                    calculate_travel_time(
+                        route_distance
+                    ),
+
+                "zones":
+                    zones_for_vehicle
+            }
+        )
+
+        total_distance += (
+            route_distance
+        )
+
+    # ========================================================
+    # 19. ROUTE DETAILS
+    # ========================================================
+
+    route_details = list(
+        route_detail_map.values()
+    )
+
+    # ========================================================
+    # 20. TOTAL DEMAND
+    # ========================================================
+
+    total_demand = sum(
+        zone_data["demand"]
+        for zone_data in reachable_zones
+    )
+
+    total_served = sum(
+        served_by_zone.values()
+    )
+
+    coverage_percent = 0.0
+
+    if total_demand > 0:
+
+        coverage_percent = (
+            total_served
+            / total_demand
+        ) * 100
+
+    # ========================================================
+    # 21. ZONE STATUS
+    # ========================================================
+
+    zone_status = []
+
+    for zone_data in valid_zones:
+
+        zone = zone_data["zone"]
+
+        zone_id = zone.id
+
+        required = float(
+            zone_data["demand"]
+        )
+
+        allocated = float(
+            served_by_zone.get(
+                zone_id,
+                0.0
+            )
+        )
+
+        shortage = max(
+            required - allocated,
+            0.0
+        )
+
+        # ----------------------------------------------------
+        # Check route availability.
+        # ----------------------------------------------------
+
+        available_vehicle = None
+
+        for vehicle in vehicles:
+
+            if (
+                vehicle.latitude is None
+                or vehicle.longitude is None
+            ):
+                continue
+
+            route_info = (
+                find_vehicle_zone_route(
+                    graph,
+                    float(vehicle.latitude),
+                    float(vehicle.longitude),
+                    zone_data[
+                        "latitude"
+                    ],
+                    zone_data[
+                        "longitude"
+                    ]
+                )
+            )
+
+            if route_info[
+                "route_available"
+            ]:
+
+                available_vehicle = (
+                    vehicle
+                )
+
+                break
+
+        if available_vehicle is not None:
+
+            route_available = True
+
+            route_status = "Available"
+
+            route_reason = (
+                "At least one vehicle has "
+                "an available route to this zone."
+            )
+
+        else:
+
+            route_available = False
+
+            route_status = "Blocked"
+
+            route_reason = (
+                "No vehicle has an available "
+                "route to this zone."
+            )
+
+        # ----------------------------------------------------
+        # DELIVERY STATUS
+        # ----------------------------------------------------
+
+        if allocated <= 0:
+
+            delivery_status = (
+                "Not Served"
+            )
+
+        elif shortage > 0:
+
+            delivery_status = (
+                "Partially Served"
+            )
+
+        else:
+
+            delivery_status = (
+                "Fully Served"
+            )
+
+        zone_status.append(
+            {
+                "zone_id":
+                    zone_id,
+
+                "zone_name":
+                    zone.zone_name,
+
+                "severity":
+                    round(
+                        zone_data[
+                            "severity"
+                        ],
+                        2
+                    ),
+
+                "priority":
+                    round(
+                        zone_data[
+                            "effective_priority"
+                        ],
+                        2
+                    ),
+
+                "priority_override":
+                    zone_data[
+                        "priority_override"
+                    ],
+
+                "priority_overridden":
+                    zone_data[
+                        "priority_overridden"
+                    ],
+
+                "required":
+                    round(
+                        required,
+                        2
+                    ),
+
+                "allocated":
+                    round(
+                        allocated,
+                        2
+                    ),
+
+                "shortage":
+                    round(
+                        shortage,
+                        2
+                    ),
+
+                "status":
+                    delivery_status,
+
+                "route_status":
+                    route_status,
+
+                "route_available":
+                    route_available,
+
+                "route_reason":
+                    route_reason
+            }
+        )
+
+   
+    # 22. FINAL RESPONSE
+  
+
+    return {
+        "status":
+            "optimized",
+
+        "solver":
+            "OR-Tools Routing Solver",
+
+        "objective":
+            (
+                "Prioritize high-severity zones using "
+                "normalized commander priority boosts, "
+                "allow multi-vehicle delivery, respect "
+                "vehicle capacity, use only open roads, "
+                "and minimize travel distance."
+            ),
+
+        "vehicles_used":
+            len(vehicles),
+
+        "total_demand":
+            round(
+                total_demand,
+                2
+            ),
+
+        "total_served_demand":
+            round(
+                total_served,
+                2
+            ),
+
+        "coverage_percent":
+            round(
+                coverage_percent,
+                2
+            ),
+
+        "total_distance_km":
+            round(
+                total_distance,
+                2
+            ),
+
+        "vehicle_starts":
+            vehicle_starts,
+
+        "routes":
+            optimized_routes,
+
+        "route_details":
+            route_details,
+
+        "zone_status":
+            zone_status,
+
+        "blocked_zones":
+            blocked_zones
+    }

@@ -9,7 +9,7 @@ from app.services.demand_prediction_service import (
 RESOURCE_MAP = {
     "food_packets": "Food",
     "water_liters": "Water",
-    "medical_kits": "Medical",
+    "medical_kits": "medical_kits",
     "shelter_capacity": "Shelter",
 }
 
@@ -18,6 +18,14 @@ def allocate_resources(
     db: Session,
     zone_id: int
 ):
+    """
+    Calculate current resource availability.
+
+    READ-ONLY:
+    This function does NOT deduct inventory.
+    Inventory is deducted only when allocation
+    is approved.
+    """
 
     prediction = predict_zone_demand(
         db,
@@ -38,22 +46,27 @@ def allocate_resources(
 
         if isinstance(data, dict):
             required = float(
-                data["predicted"]
+                data.get("predicted", 0)
             )
         else:
             required = float(data)
 
-        resource_type = RESOURCE_MAP.get(
-            resource
-        )
+        resource_type = RESOURCE_MAP.get(resource)
 
+        if not resource_type:
+            continue
+
+        # Case-insensitive matching for both
+        # resource type and availability status.
         resources = (
             db.query(Resource)
             .filter(
-                Resource.resource_type
-                == resource_type,
-                Resource.status
-                == "Available"
+                Resource.resource_type.ilike(
+                    resource_type
+                ),
+                Resource.status.ilike(
+                    "Available"
+                )
             )
             .all()
         )
@@ -73,29 +86,6 @@ def allocate_resources(
             0
         )
 
-        # Deduct allocated amount
-        remaining = allocated
-
-        for r in resources:
-
-            if remaining <= 0:
-                break
-
-            stock = float(
-                r.capacity or 0
-            )
-
-            deduction = min(
-                stock,
-                remaining
-            )
-
-            r.capacity = int(
-                stock - deduction
-            )
-
-            remaining -= deduction
-
         allocation[resource] = {
             "required": round(
                 required,
@@ -114,8 +104,6 @@ def allocate_resources(
                 2
             )
         }
-
-    db.commit()
 
     return {
         "zone_id": prediction["zone_id"],

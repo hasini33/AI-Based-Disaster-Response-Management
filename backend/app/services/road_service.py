@@ -1,6 +1,37 @@
 from sqlalchemy.orm import Session
-
+from sqlalchemy import text
 from app.models.road import Road
+from app.models.zone import Zone
+
+
+def get_zone_coordinates(
+    db: Session,
+    zone_id: int
+):
+    """
+    Get the centroid coordinates of a zone.
+    """
+
+    result = db.execute(
+       text( """
+        SELECT
+            ST_Y(ST_Centroid(geometry)),
+            ST_X(ST_Centroid(geometry))
+        FROM zones
+        WHERE id = :zone_id
+        """),
+        {
+            "zone_id": zone_id
+        }
+    ).fetchone()
+
+    if not result:
+        return None
+
+    return {
+        "latitude": result[0],
+        "longitude": result[1]
+    }
 
 
 def create_sample_roads(db: Session):
@@ -13,57 +44,165 @@ def create_sample_roads(db: Session):
             "count": existing
         }
 
-    roads = [
+    # --------------------------------------------------
+    # Get all existing zones
+    # --------------------------------------------------
 
-        Road(
-            road_name="Main Road",
-            start_latitude=17.380,
-            start_longitude=78.480,
-            end_latitude=17.375,
-            end_longitude=78.475,
-            distance_km=0.77,
-            status="Open",
-            travel_time_minutes=3
-        ),
+    zones = (
+        db.query(Zone)
+        .order_by(Zone.id)
+        .all()
+    )
 
-        Road(
-            road_name="East Bypass",
-            start_latitude=17.380,
-            start_longitude=78.480,
-            end_latitude=17.370,
-            end_longitude=78.465,
-            distance_km=1.90,
-            status="Open",
-            travel_time_minutes=7
-        ),
+    if not zones:
+        return {
+            "message": "No zones found",
+            "count": 0
+        }
 
-        Road(
-            road_name="North Route",
-            start_latitude=17.400,
-            start_longitude=78.500,
-            end_latitude=17.375,
-            end_longitude=78.475,
-            distance_km=3.60,
-            status="Open",
-            travel_time_minutes=12
-        ),
+    roads = []
 
-        Road(
-            road_name="Flooded Road",
-            start_latitude=17.385,
-            start_longitude=78.486,
-            end_latitude=17.375,
-            end_longitude=78.475,
-            distance_km=1.50,
-            status="Blocked",
-            travel_time_minutes=0
+    # --------------------------------------------------
+    # Create a connected road network
+    #
+    # Each zone is connected to the next zone.
+    # The first zone is also connected to the
+    # Relief Center A coordinates.
+    # --------------------------------------------------
+
+    depot_latitude = 17.380
+    depot_longitude = 78.480
+
+    zone_points = []
+
+    for zone in zones:
+
+        coordinates = get_zone_coordinates(
+            db,
+            zone.id
         )
-    ]
+
+        if coordinates:
+
+            zone_points.append({
+                "zone": zone,
+                "latitude": coordinates["latitude"],
+                "longitude": coordinates["longitude"]
+            })
+
+    # --------------------------------------------------
+    # Depot → first zone
+    # --------------------------------------------------
+
+    if zone_points:
+
+        first = zone_points[0]
+
+        roads.append(
+            Road(
+                road_name="Relief Center Main Route",
+
+                start_latitude=depot_latitude,
+                start_longitude=depot_longitude,
+
+                end_latitude=first["latitude"],
+                end_longitude=first["longitude"],
+
+                distance_km=1.0,
+                status="Open",
+                travel_time_minutes=5
+            )
+        )
+
+    # --------------------------------------------------
+    # Connect every zone to the next zone
+    # --------------------------------------------------
+
+    for index in range(
+        len(zone_points) - 1
+    ):
+
+        current = zone_points[index]
+        next_zone = zone_points[index + 1]
+
+        roads.append(
+            Road(
+                road_name=(
+                    f"{current['zone'].zone_name}"
+                    f" - "
+                    f"{next_zone['zone'].zone_name}"
+                    f" Road"
+                ),
+
+                start_latitude=current["latitude"],
+                start_longitude=current["longitude"],
+
+                end_latitude=next_zone["latitude"],
+                end_longitude=next_zone["longitude"],
+
+                distance_km=2.0,
+                status="Open",
+                travel_time_minutes=8
+            )
+        )
+
+    # --------------------------------------------------
+    # Add an alternative route from the depot
+    # --------------------------------------------------
+
+    if len(zone_points) >= 2:
+
+        second = zone_points[1]
+
+        roads.append(
+            Road(
+                road_name="Emergency Bypass",
+
+                start_latitude=depot_latitude,
+                start_longitude=depot_longitude,
+
+                end_latitude=second["latitude"],
+                end_longitude=second["longitude"],
+
+                distance_km=3.5,
+                status="Open",
+                travel_time_minutes=12
+            )
+        )
+
+    # --------------------------------------------------
+    # Add one blocked road for disaster testing
+    # --------------------------------------------------
+
+    if len(zone_points) >= 3:
+
+        blocked_zone = zone_points[2]
+
+        roads.append(
+            Road(
+                road_name="Flood Damaged Road",
+
+                start_latitude=depot_latitude,
+                start_longitude=depot_longitude,
+
+                end_latitude=blocked_zone["latitude"],
+                end_longitude=blocked_zone["longitude"],
+
+                distance_km=2.5,
+                status="Blocked",
+                travel_time_minutes=0
+            )
+        )
+
+    # --------------------------------------------------
+    # Save roads
+    # --------------------------------------------------
 
     db.add_all(roads)
+
     db.commit()
 
     return {
-        "message": "Sample roads created",
+        "message": "Connected zone road network created",
         "count": len(roads)
     }
