@@ -1,436 +1,466 @@
 import { useEffect, useState } from "react"
-import { useSearchParams } from "react-router-dom"
-
-import DisasterMap from "../Map/DisasterMap"
-import ResourceChart from "../Charts/ResourceChart"
-
+import { useNavigate, useSearchParams } from "react-router-dom"
 import {
   Activity,
-  Users,
-  Package,
-  TriangleAlert,
-  MapPin,
-  ShieldAlert,
-  Layers3,
-  Info,
+  ArrowUpRight,
+  Boxes,
+  CheckCircle2,
+  ChevronRight,
   Clock3,
-  Radio,
-  Truck,
+  Crosshair,
   HeartPulse,
   Home,
-  ArrowUpRight,
-  ChevronRight,
+  Layers3,
+  MapPin,
+  Package,
+  Radio,
+  RefreshCw,
+  ShieldAlert,
+  Truck,
+  TriangleAlert,
+  Users,
+  Zap,
 } from "lucide-react"
 
-import { getDisasterImpact } from "../../services/disasterService"
+import {
+  getDisasters,
+  getDisasterImpact,
+} from "../../services/disasterService"
+
+import StatCard from "../Cards/StatCard"
+import ResourceChart from "../Charts/ResourceChart"
+import DisasterMap from "../Map/DisasterMap"
+
+
+const stats = [
+  {
+    title: "Active disasters",
+    value: "12",
+    description: "events requiring coordination",
+    trendLabel: "+2",
+    icon: TriangleAlert,
+    tone: "coral",
+  },
+  {
+    title: "Population exposed",
+    value: "24,580",
+    description: "people inside impact zones",
+    trendLabel: "+8.4%",
+    icon: Users,
+    tone: "violet",
+  },
+  {
+    title: "Response inventory",
+    value: "156",
+    description: "resource units ready to move",
+    trendLabel: "82%",
+    icon: Boxes,
+    tone: "teal",
+  },
+  {
+    title: "Critical zones",
+    value: "05",
+    description: "priority corridors need action",
+    trendLabel: "watch",
+    icon: Crosshair,
+    tone: "amber",
+    trend: "flat",
+  },
+]
+
+
+const readiness = [
+  {
+    title: "Food supplies",
+    value: 82,
+    detail: "Adequate for current demand",
+    icon: Package,
+    tone: "teal",
+  },
+  {
+    title: "Water supply",
+    value: 68,
+    detail: "Watch high-demand zones",
+    icon: Activity,
+    tone: "amber",
+  },
+  {
+    title: "Medical kits",
+    value: 54,
+    detail: "Replenishment recommended",
+    icon: HeartPulse,
+    tone: "coral",
+  },
+  {
+    title: "Shelter capacity",
+    value: 73,
+    detail: "Capacity currently available",
+    icon: Home,
+    tone: "violet",
+  },
+]
 
 
 function Dashboard() {
-
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
+  const urlDisasterId = searchParams.get("disasterId")
+
+  const [selectedDisasterId, setSelectedDisasterId] = useState(
+    urlDisasterId ? Number(urlDisasterId) : null
+  )
+
   const [selectedDisaster, setSelectedDisaster] = useState(null)
+  const [selectedLoading, setSelectedLoading] = useState(false)
+  const [selectedError, setSelectedError] = useState(false)
+  const [alertAcknowledged, setAlertAcknowledged] = useState(false)
 
-  const selectedDisasterId = searchParams.get("disasterId")
 
-
-  // =====================================================
-  // LOAD SELECTED DISASTER
-  // =====================================================
-
+  /*
+   * STEP 1
+   *
+   * If the user comes directly to Dashboard and there is
+   * no disasterId in the URL, automatically select a disaster.
+   *
+   * We select the highest severity disaster so the dashboard
+   * immediately shows the most important incident.
+   */
   useEffect(() => {
+    if (urlDisasterId) {
+      setSelectedDisasterId(Number(urlDisasterId))
+      return
+    }
 
+    const loadDefaultDisaster = async () => {
+      try {
+        const disasters = await getDisasters()
+
+        if (!disasters || disasters.length === 0) {
+          return
+        }
+
+        // Find the disaster with the highest severity
+        const highestSeverityDisaster = [...disasters].sort(
+          (a, b) => Number(b.severity || 0) - Number(a.severity || 0)
+        )[0]
+
+        if (highestSeverityDisaster?.id) {
+          setSelectedDisasterId(Number(highestSeverityDisaster.id))
+
+          // Keep the selected incident in the URL
+          navigate(
+            `/?disasterId=${highestSeverityDisaster.id}`,
+            { replace: true }
+          )
+        }
+      } catch (error) {
+        console.error("Unable to load default disaster:", error)
+      }
+    }
+
+    loadDefaultDisaster()
+  }, [urlDisasterId, navigate])
+
+
+  /*
+   * STEP 2
+   *
+   * Once we have a selected disaster ID,
+   * load its impact information.
+   */
+  const loadSelectedImpact = () => {
     if (!selectedDisasterId) {
       setSelectedDisaster(null)
       return
     }
+
+    setSelectedLoading(true)
+    setSelectedError(false)
 
     getDisasterImpact(Number(selectedDisasterId))
       .then((data) => {
         setSelectedDisaster(data)
       })
       .catch((error) => {
-        console.error("Failed to load selected disaster:", error)
+        console.error("Unable to load selected disaster:", error)
         setSelectedDisaster(null)
+        setSelectedError(true)
       })
+      .finally(() => {
+        setSelectedLoading(false)
+      })
+  }
 
+
+  useEffect(() => {
+    loadSelectedImpact()
   }, [selectedDisasterId])
 
 
-  // =====================================================
-  // STAT CARD DATA
-  // =====================================================
-
-  const stats = [
-    {
-      title: "Active Disasters",
-      value: "12",
-      description: "Currently active events",
-      icon: Activity,
-      iconBg: "bg-blue-50 dark:bg-blue-500/10",
-      iconColor: "text-blue-600 dark:text-blue-400",
-    },
-    {
-      title: "Affected Population",
-      value: "24,580",
-      description: "People in affected zones",
-      icon: Users,
-      iconBg: "bg-purple-50 dark:bg-purple-500/10",
-      iconColor: "text-purple-600 dark:text-purple-400",
-    },
-    {
-      title: "Resources Available",
-      value: "156",
-      description: "Relief resources ready",
-      icon: Package,
-      iconBg: "bg-emerald-50 dark:bg-emerald-500/10",
-      iconColor: "text-emerald-600 dark:text-emerald-400",
-    },
-    {
-      title: "High Severity Zones",
-      value: "5",
-      description: "Require immediate attention",
-      icon: TriangleAlert,
-      iconBg: "bg-red-50 dark:bg-red-500/10",
-      iconColor: "text-red-600 dark:text-red-400",
-    },
-  ]
-
-
   return (
+    <div className="page-enter space-y-6">
 
-    <div className="space-y-5 pb-6">
+      {/* HEADER */}
 
-
-      {/* =====================================================
-          PAGE INTRO
-      ===================================================== */}
-
-      <section className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-
+      <section className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div>
 
-          {/* Small page identifier */}
+          <div className="mb-3 flex items-center gap-2">
+            <span className="status-dot status-dot--pulse text-[hsl(var(--teal))]" />
 
-          <div className="flex items-center gap-2 mb-2">
-
-            <span className="flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-blue-600 dark:text-blue-400">
-
-              <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400" />
-
-              Live Response
-
+            <span className="eyebrow">
+              Live response / operational overview
             </span>
 
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-
-            <span className="text-xs text-slate-400">
-              Operational Overview
-            </span>
+            <ChevronRight
+              size={13}
+              className="text-[hsl(var(--ink-faint))]"
+            />
 
           </div>
 
-
-          {/* Main page heading */}
-
-          <h1 className="text-3xl  font-bold text-slate-900 dark:text-white">
-
-            Situation Overview
-
+          <h1 className="max-w-3xl text-[clamp(2rem,4vw,3.7rem)] font-extrabold leading-[.98] tracking-[-.075em] text-[hsl(var(--foreground))]">
+            Dashboard
+            <span className="text-[hsl(var(--coral))]">.</span>
           </h1>
 
-
-          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-
-            Monitor incidents, population impact, resources and response readiness.
-
-          </p>
+          <p className="mt-4 max-w-xl text-sm leading-6 text-[hsl(var(--ink-soft))]">
+            A single operating picture for incident posture, population exposure
+            and the resources.
+          </p>  
 
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
 
-        {/* System status */}
-
-        <div className="flex items-center gap-3">
-
-          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-blue-100 dark:bg-blue-950 border border-blue-300 dark:border-blue-800 shadow-sm">
-
-            <span className="relative flex h-2.5 w-2.5">
-
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-
-            </span>
-
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              System Online
-            </span>
-
-          </div>
-
-
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-
-            <Clock3 className="w-3.5 h-3.5" />
-
-            Updated recently
-
+          <div className="pill pill--live">
+            <span className="status-dot status-dot--pulse" />
+            System nominal
           </div>
 
         </div>
-
       </section>
 
 
+      {/* STAT CARDS */}
 
-      {/* =====================================================
-          KEY METRICS
-      ===================================================== */}
-
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-
-        {stats.map((stat) => {
-
-          const Icon = stat.icon
-
-          return (
-
-            <div
-              key={stat.title}
-              className="group bg-blue-50 dark:bg-blue-950 rounded-2xl border border-blue-300 dark:border-blue-800 shadow-sm hover:shadow-md transition-all duration-200 p-5"            >
-
-              <div className="flex items-start justify-between">
-
-                <div>
-
-                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                    {stat.title}
-                  </p>
-
-                  <p className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-                    {stat.value}
-                  </p>
-
-                </div>
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat, index) => (
+          <StatCard
+            key={stat.title}
+            {...stat}
+            index={index}
+          />
+        ))}
+      </section>
 
 
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center ${stat.iconBg}`}
-                >
+      {/* MAP + SELECTED INCIDENT */}
 
-                  <Icon className={`w-5 h-5 ${stat.iconColor}`} />
+      <section className="grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,.8fr)]">
 
-                </div>
+        {/* MAP */}
 
+        <article className="section-card">
+
+          <div className="card-header">
+
+            <div className="flex items-start gap-3">
+
+              <div className="icon-chip">
+                <MapPin size={18} />
               </div>
 
-
-              <div className="flex items-center gap-1.5 mt-4">
-
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {stat.description}
+              <div>
+                <p className="card-title">
+                  Disaster impact map
                 </p>
 
+                <p className="card-subtitle">
+                  Live incident locations, perimeters and selected impact geometry
+                </p>
               </div>
 
             </div>
 
-          )
+            <div className="hidden items-center gap-2 sm:flex">
 
-        })}
+              <span className="mono text-[10px] uppercase tracking-wider text-[hsl(var(--ink))]">
+                Layer / 01
+              </span>
 
-      </section>
-
-
-
-      {/* =====================================================
-          LIVE RESPONSE AREA
-      ===================================================== */}
-
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-
-
-        {/* ===================================================
-            MAP
-        =================================================== */}
-
-<div className="xl:col-span-2 bg-blue-50 dark:bg-blue-950 rounded-2xl border border-blue-400 dark:border-blue-800 shadow-sm overflow-hidden">
-          {/* Map header */}
-
-          <div className="px-5 py-4 border-b border-blue-400 dark:border-blue-800">
-
-            <div className="flex items-center justify-between gap-4">
-
-              <div className="flex items-center gap-3">
-
-                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center">
-
-                  <MapPin className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-
-                </div>
-
-                <div>
-
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    Disaster Impact Map
-                  </h2>
-
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Live incident locations and affected areas
-                  </p>
-
-                </div>
-
-              </div>
-
-
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-700/60 border border-indigo-600 dark:border-indigo-800">
-
-                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                  Live Layer
-                </span>
-
-              </div>
-
-            </div>
-
-          </div>
-
-
-          {/* Map */}
-
-          <div className="p-3">
-
-            <div className="h-[430px] rounded-xl overflow-hidden border border-blue-500 dark:border-blue-800">
-
-              <DisasterMap
-                selectedDisasterId={
-                  selectedDisasterId
-                    ? Number(selectedDisasterId)
-                    : null
-                }
+              <Radio
+                size={16}
+                className="text-[hsl(var(--teal))]"
               />
 
             </div>
 
           </div>
 
-        </div>
+          <div className="p-3 sm:p-5">
+
+            <DisasterMap
+              selectedDisasterId={
+                selectedDisasterId
+                  ? Number(selectedDisasterId)
+                  : null
+              }
+            />
+
+          </div>
+
+        </article>
 
 
+        {/* SELECTED INCIDENT */}
 
-        {/* ===================================================
-            SELECTED INCIDENT
-        =================================================== */}
+        <article className="section-card flex flex-col">
 
-<div className="bg-blue-50 dark:bg-blue-950 rounded-2xl border border-blue-500 dark:border-blue-900 shadow-sm overflow-hidden">
-          {/* Header */}
+          <div className="card-header">
 
-<div className="px-5 py-4 border-b border-blue-500 dark:border-blue-800">
-            <div className="flex items-center gap-3">
+            <div className="flex items-start gap-3">
 
-              <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center">
-
-                <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400" />
-
+              <div className="icon-chip icon-chip--alert">
+                <ShieldAlert size={18} />
               </div>
 
               <div>
 
-                <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                  Selected Incident
-                </h2>
+                <p className="card-title">
+                  Selected incident
+                </p>
 
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Detailed impact information
+                <p className="card-subtitle">
+                  Impact record and response posture
                 </p>
 
               </div>
 
             </div>
 
+            <span className="mono text-[9px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
+              {selectedDisasterId
+                ? `ID ${selectedDisasterId}`
+                : "AUTO FOCUS"}
+            </span>
+
           </div>
 
 
+          <div className="flex flex-1 flex-col p-5">
 
-          {/* Incident selected */}
+            {/* LOADING */}
 
-          {selectedDisaster ? (
+            {selectedLoading ? (
 
-            <div className="p-5 space-y-4">
+              <div className="space-y-4">
 
+                <div className="h-20 animate-pulse rounded-xl bg-[hsl(var(--surface-muted))]" />
 
-              {/* Disaster type */}
+                <div className="h-10 animate-pulse rounded-lg bg-[hsl(var(--surface-muted))]" />
 
-<div className="p-4 rounded-xl bg-indigo-200 dark:bg-indigo-900/60 border border-indigo-500 dark:border-indigo-800">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Disaster Type
-                </p>
+                <div className="h-10 animate-pulse rounded-lg bg-[hsl(var(--surface-muted))]" />
 
-                <p className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                  {selectedDisaster.disaster_type}
-                </p>
+                <div className="h-10 animate-pulse rounded-lg bg-[hsl(var(--surface-muted))]" />
 
               </div>
 
+            ) : selectedError ? (
 
-              {/* Coordinates */}
+              /* ERROR */
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
 
-                <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center">
+                <TriangleAlert
+                  size={22}
+                  className="text-[hsl(var(--coral))]"
+                />
 
-                  <MapPin className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <p className="mt-3 text-sm font-bold text-[hsl(var(--foreground))]">
+                  Impact record unavailable
+                </p>
 
-                </div>
-
-                <div>
-
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Coordinates
-                  </p>
-
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
-
-                    {selectedDisaster.latitude},{" "}
-                    {selectedDisaster.longitude}
-
-                  </p>
-
-                </div>
+                <button
+                  type="button"
+                  data-testid="button-retry-selected-impact"
+                  onClick={loadSelectedImpact}
+                  className="mt-4 flex items-center gap-2 rounded-lg border border-[hsl(var(--line))] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--foreground))] hover:bg-[hsl(var(--surface-muted))]"
+                >
+                  <RefreshCw size={13} />
+                  Try again
+                </button>
 
               </div>
 
+            ) : selectedDisaster ? (
 
-              {/* Severity */}
+              /* INCIDENT FOUND */
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-1 flex-col">
 
-                <div className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-500/10 flex items-center justify-center">
+                <div className="rounded-xl border border-[hsl(var(--coral)/.2)] bg-[hsl(var(--coral-soft)/.7)] p-4">
 
-                  <Activity className="w-4 h-4 text-red-600 dark:text-red-400" />
-
-                </div>
-
-                <div>
-
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Severity Level
+                  <p className="eyebrow text-[hsl(var(--coral))]">
+                    Current incident
                   </p>
 
-                  <div className="flex items-center gap-2 mt-1">
+                  <p className="mt-2 text-2xl font-extrabold tracking-[-.05em] text-[hsl(var(--foreground))]">
+                    {selectedDisaster.disaster_type}
+                  </p>
 
-                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-400">
+                  <div className="mt-3 flex items-center gap-2">
+
+                    <span className="rounded-full bg-[hsl(var(--coral))] px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-[hsl(var(--surface))]">
                       Level {selectedDisaster.severity}
                     </span>
 
-                    <span className="text-xs font-medium text-red-600 dark:text-red-400">
-                      High priority
+                    <span className="text-[10px] font-bold text-[hsl(var(--coral))]">
+                      Immediate attention
+                    </span>
+
+                  </div>
+
+                </div>
+
+
+                <div className="mt-5 space-y-4">
+
+                  <IncidentFact
+                    icon={MapPin}
+                    label="Coordinates"
+                    value={`${selectedDisaster.latitude}, ${selectedDisaster.longitude}`}
+                  />
+
+                  <IncidentFact
+                    icon={Layers3}
+                    label="Impact radius"
+                    value={`${selectedDisaster.impact_extent?.radius_km ?? "—"} km`}
+                  />
+
+                  <IncidentFact
+                    icon={Crosshair}
+                    label="Response zone"
+                    value={
+                      selectedDisaster.zone_name ||
+                      "Not assigned"
+                    }
+                  />
+
+                </div>
+
+
+                <div className="mt-auto border-t border-[hsl(var(--line))] pt-4">
+
+                  <div className="flex items-center justify-between">
+
+                    <span className="mono text-[10px] uppercase tracking-wider text-[hsl(var(--ink))]">
+                      Record reference
+                    </span>
+
+                    <span className="mono text-[10px] font-medium text-[hsl(var(--foreground))]">
+                      #{selectedDisaster.disaster_id}
                     </span>
 
                   </div>
@@ -439,427 +469,473 @@ function Dashboard() {
 
               </div>
 
+            ) : (
 
-              {/* Impact radius */}
+              /* NO DATA */
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
 
-                <div className="w-9 h-9 rounded-lg bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center">
-
-                  <Layers3 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[hsl(var(--surface-muted))] text-[hsl(var(--ink-faint))]">
+                  <RefreshCw size={21} />
                 </div>
 
-                <div>
-
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Impact Radius
-                  </p>
-
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
-
-                    {selectedDisaster.impact_extent?.radius_km ?? "—"} km
-
-                  </p>
-
-                </div>
-
-              </div>
-
-
-              {/* Zone */}
-
-              <div className="flex items-center gap-3">
-
-                <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center">
-
-                  <MapPin className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-
-                </div>
-
-                <div>
-
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Response Zone
-                  </p>
-
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
-
-                    {selectedDisaster.zone_name || "Not assigned"}
-
-                  </p>
-
-                </div>
-
-              </div>
-
-
-              {/* ID */}
-
-              <div className="pt-4 border-t border-blue-200 dark:border-blue-800">
-
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Disaster ID
+                <p className="mt-4 text-sm font-extrabold text-[hsl(var(--foreground))]">
+                  Loading incident data
                 </p>
 
-                <p className="text-sm font-mono font-semibold text-slate-700 dark:text-slate-300 mt-1">
-
-                  #{selectedDisaster.disaster_id}
-
+                <p className="mt-2 max-w-xs text-[11px] leading-5 text-[hsl(var(--ink-soft))]">
+                  Finding the highest-priority active incident...
                 </p>
 
               </div>
 
-            </div>
+            )}
 
-          ) : (
+          </div>
 
-            /* Empty state */
-
-            <div className="min-h-[430px] flex flex-col items-center justify-center text-center px-6">
-
-              <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-
-                <Info className="w-6 h-6 text-slate-400 dark:text-slate-500" />
-
-              </div>
-
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">
-                No incident selected
-              </h3>
-
-              <p className="text-xs leading-5 text-slate-500 dark:text-slate-400 mt-2 max-w-xs">
-
-                Select a disaster from the map or Disasters page to inspect its impact.
-
-              </p>
-
-            </div>
-
-          )}
-
-        </div>
+        </article>
 
       </section>
 
 
+      {/* OPERATIONAL READINESS */}
 
-      {/* =====================================================
-          OPERATIONAL READINESS
-      ===================================================== */}
+      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,.8fr)]">
 
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <article className="section-card">
 
+          <div className="card-header">
 
-        {/* Resource readiness */}
+            <div className="flex items-start gap-3">
 
-        <div className="lg:col-span-2 bg-blue-50 dark:bg-blue-950 rounded-2xl border border-blue-500 dark:border-blue-800 shadow-sm overflow-hidden">
-
-          <div className="px-5 py-4 border-b border-slate-400 dark:border-slate-700">
-
-            <div className="flex items-center justify-between">
+              <div className="icon-chip icon-chip--amber">
+                <Zap size={18} />
+              </div>
 
               <div>
 
-                <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                  Operational Readiness
-                </h2>
+                <p className="card-title">
+                  Operational readiness
+                </p>
 
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Current capacity of critical response resources
+                <p className="card-subtitle">
+                  Capacity of critical response resources at this moment
                 </p>
 
               </div>
 
-              <Package className="w-5 h-5 text-slate-400" />
-
             </div>
 
-          </div>
-
-
-          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-
-            {/* Food */}
-
-            <ReadinessCard
-              icon={Package}
-              title="Food Supplies"
-              percentage="82%"
-              width="82%"
-              color="bg-blue-600"
-              description="Adequate for current demand"
-            />
-
-
-            {/* Water */}
-
-            <ReadinessCard
-              icon={Activity}
-              title="Water Supply"
-              percentage="68%"
-              width="68%"
-              color="bg-cyan-500"
-              description="Monitor high-demand zones"
-            />
-
-
-            {/* Medical */}
-
-            <ReadinessCard
-              icon={HeartPulse}
-              title="Medical Kits"
-              percentage="54%"
-              width="54%"
-              color="bg-red-500"
-              description="Replenishment recommended"
-              warning
-            />
-
-
-            {/* Shelter */}
-
-            <ReadinessCard
-              icon={Home}
-              title="Shelter Capacity"
-              percentage="73%"
-              width="73%"
-              color="bg-purple-600"
-              description="Capacity available"
-            />
+            <span className="mono text-[10px] uppercase tracking-wider text-[hsl(var(--ink))]">
+              4 categories
+            </span>
 
           </div>
 
-        </div>
+
+          <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
+
+            {readiness.map((item) => (
+              <ReadinessItem
+                key={item.title}
+                {...item}
+              />
+            ))}
+
+          </div>
+
+        </article>
 
 
+        {/* RESPONSE OPERATIONS */}
 
-        {/* Response operations */}
+        <article className="overflow-hidden rounded-[18px] bg-[hsl(var(--navy))] p-5 text-[hsl(var(--surface))] shadow-[0_18px_38px_hsl(var(--navy)/.18)]">
 
-<div className="bg-indigo-900 dark:bg-indigo-950 rounded-2xl border border-indigo-800 dark:border-indigo-800 shadow-sm p-5 text-indigo-50">
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between">
 
             <div>
 
-              <p className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">
-                Response Operations
+              <p className="mono text-[9px] uppercase tracking-[.16em] text-[hsl(var(--amber))]">
+                Response operations
               </p>
 
-              <h2 className="text-lg font-bold mt-1">
-                Teams in Action
+              <h2 className="mt-2 text-xl font-extrabold tracking-[-.06em]">
+                Teams in motion
               </h2>
 
             </div>
 
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
-
-              <Truck className="w-5 h-5 text-blue-400" />
-
+            <div className="rounded-xl bg-[hsl(var(--surface)/.1)] p-2.5 text-[hsl(var(--amber))]">
+              <Truck size={18} />
             </div>
 
           </div>
 
 
-          <div className="space-y-3 mt-5">
-
+          <div className="mt-6 space-y-2">
 
             <OperationRow
               icon={Truck}
-              iconColor="text-blue-400"
-              title="Supply Vehicles"
-              description="Active transport"
+              title="Supply vehicles"
+              detail="Active transport"
               value="08"
             />
 
-
             <OperationRow
               icon={HeartPulse}
-              iconColor="text-red-400"
-              title="Medical Teams"
-              description="Deployed"
+              title="Medical teams"
+              detail="Deployed"
               value="12"
             />
 
-
             <OperationRow
               icon={Users}
-              iconColor="text-purple-400"
-              title="Rescue Teams"
-              description="On standby"
+              title="Rescue teams"
+              detail="On standby"
               value="06"
             />
 
           </div>
 
 
-          <div className="flex items-center gap-2 mt-5 pt-4 border-t border-white/10">
+          <button
+            type="button"
+            data-testid="button-open-response-board"
+            onClick={() => navigate("/response")}
+            className="mt-5 flex w-full items-center justify-between border-t border-[hsl(var(--surface)/.14)] pt-4 text-left text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--surface)/.7)] transition hover:text-[hsl(var(--amber))]"
+          >
+            Open response board
+            <ArrowUpRight size={14} />
+          </button>
 
-            <ArrowUpRight className="w-4 h-4 text-emerald-400" />
+        </article>
 
-            <span className="text-xs text-slate-400 leading-5">
-              Response operations are monitored continuously.
-            </span>
+      </section>
+
+
+      {/* RESOURCE DEMAND */}
+
+      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,.8fr)]">
+
+        <article className="section-card">
+
+          <div className="card-header">
+
+            <div className="flex items-start gap-3">
+
+              <div className="icon-chip icon-chip--violet">
+                <Package size={18} />
+              </div>
+
+              <div>
+
+                <p className="card-title">
+                  Resource demand
+                </p>
+
+                <p className="card-subtitle">
+                  Current requirement signal across affected areas
+                </p>
+
+              </div>
+
+            </div>
 
           </div>
 
-        </div>
+          <div className="p-5">
+            <ResourceChart />
+          </div>
+
+        </article>
+
+
+        {/* DESK BRIEF */}
+
+        <article className="section-card">
+
+          <div className="card-header">
+
+            <div className="flex items-start gap-3">
+
+              <div className="icon-chip">
+                <CheckCircle2 size={18} />
+              </div>
+
+              <div>
+
+                <p className="card-title">
+                  Desk brief
+                </p>
+
+                <p className="card-subtitle">
+                  Signals requiring a coordinator decision
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div className="space-y-2 p-4">
+
+            <BriefRow
+              color="coral"
+              time="08:36"
+              text="Five critical zones remain above response threshold."
+            />
+
+            <BriefRow
+              color="amber"
+              time="08:21"
+              text="Water demand rising in the eastern corridor."
+            />
+
+            <BriefRow
+              color="teal"
+              time="07:58"
+              text="Supply vehicle group 08 checked in at staging."
+            />
+
+
+            <button
+              type="button"
+              data-testid="button-acknowledge-brief"
+              onClick={() =>
+                setAlertAcknowledged(
+                  (acknowledged) => !acknowledged
+                )
+              }
+              className={`mt-3 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider transition ${
+                alertAcknowledged
+                  ? "border-[hsl(var(--teal)/.35)] bg-[hsl(var(--teal-soft))] text-[hsl(var(--teal))]"
+                  : "border-[hsl(var(--line))] text-[hsl(var(--ink-soft))] hover:bg-[hsl(var(--surface-muted))]"
+              }`}
+            >
+              <CheckCircle2 size={13} />
+
+              {alertAcknowledged
+                ? "Brief acknowledged"
+                : "Acknowledge brief"}
+
+            </button>
+
+          </div>
+
+        </article>
 
       </section>
 
 
+      {/* FOOTER */}
 
-      {/* =====================================================
-          RESOURCE DEMAND
-      ===================================================== */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[hsl(var(--line))] pt-5">
 
-<section className="bg-blue-50 dark:bg-blue-950 rounded-2xl border border-blue-400 dark:border-blue-800 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-blue-500 dark:border-blue-800">
+        <p className="mono text-[9px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
+          AI
+        </p>
 
-          <div className="flex items-center gap-3">
+        <button
+          type="button"
+          data-testid="button-open-disaster-registry"
+          onClick={() => navigate("/disasters")}
+          className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-[hsl(var(--teal))] hover:text-[hsl(var(--foreground))]"
+        >
+          View disaster registry
+          <ArrowUpRight size={18} />
+        </button>
 
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
-
-              <Package className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-
-            </div>
-
-            <div>
-
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                Resource Demand
-              </h2>
-
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Current resource requirements across affected areas
-              </p>
-
-            </div>
-
-          </div>
-
-        </div>
-
-
-        <div className="p-5">
-
-          <ResourceChart />
-
-        </div>
-
-      </section>
-
+      </div>
 
     </div>
   )
 }
 
 
-/* =========================================================
-   READINESS CARD
-========================================================= */
+/* INCIDENT FACT */
 
-function ReadinessCard({
-  icon: Icon,
+function IncidentFact({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-center gap-3">
+
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--surface-muted))] text-[hsl(var(--ink-soft))]">
+        <Icon size={15} />
+      </div>
+
+      <div>
+
+        <p className="text-[10px] text-[hsl(var(--ink-soft))]">
+          {label}
+        </p>
+
+        <p className="mt-1 text-[11px] font-extrabold text-[hsl(var(--foreground))]">
+          {value}
+        </p>
+
+      </div>
+
+    </div>
+  )
+}
+
+
+/* READINESS */
+
+function ReadinessItem({
   title,
-  percentage,
-  width,
-  color,
-  description,
-  warning = false,
+  value,
+  detail,
+  icon: Icon,
+  tone,
 }) {
 
+  const toneClass =
+    tone === "coral"
+      ? "text-[hsl(var(--coral))] bg-[hsl(var(--coral-soft))]"
+      : tone === "amber"
+      ? "text-[hsl(var(--amber))] bg-[hsl(var(--amber-soft))]"
+      : tone === "violet"
+      ? "text-[hsl(var(--violet))] bg-[hsl(var(--violet)/.13)]"
+      : "text-[hsl(var(--teal))] bg-[hsl(var(--teal-soft))]"
+
+  const barClass =
+    tone === "coral"
+      ? "bg-[hsl(var(--coral))]"
+      : tone === "amber"
+      ? "bg-[hsl(var(--amber))]"
+      : tone === "violet"
+      ? "bg-[hsl(var(--violet))]"
+      : "bg-[hsl(var(--teal))]"
+
   return (
+    <div className="rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--surface-raised)/.7)] p-4">
 
-<div className="p-4 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-500 dark:border-indigo-800">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
 
-          <Icon className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+          <span
+            className={`flex h-8 w-8 items-center justify-center rounded-lg ${toneClass}`}
+          >
+            <Icon size={15} />
+          </span>
 
-          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <span className="text-[11px] font-extrabold text-[hsl(var(--foreground))]">
             {title}
           </span>
 
         </div>
 
-        <span className="text-sm font-black text-slate-900 dark:text-white">
-          {percentage}
+        <span className="mono text-[12px] font-medium text-[hsl(var(--foreground))]">
+          {value}%
         </span>
 
       </div>
 
 
-<div className="h-2 bg-indigo-200 dark:bg-indigo-800 rounded-full mt-3 overflow-hidden">
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[hsl(var(--line))]">
+
         <div
-          className={`h-full ${color} rounded-full transition-all duration-500`}
-          style={{ width }}
+          className={`h-full rounded-full ${barClass}`}
+          style={{ width: `${value}%` }}
         />
 
       </div>
 
 
       <p
-        className={`text-xs mt-2 ${
-          warning
-            ? "text-red-600 dark:text-red-400 font-medium"
-            : "text-slate-500 dark:text-slate-400"
+        className={`mt-2 text-[10px] ${
+          value < 60
+            ? "font-bold text-[hsl(var(--coral))]"
+            : "text-[hsl(var(--ink-soft))]"
         }`}
       >
-        {description}
+        {detail}
       </p>
 
     </div>
-
   )
 }
 
 
-/* =========================================================
-   OPERATION ROW
-========================================================= */
+/* OPERATION ROW */
 
 function OperationRow({
   icon: Icon,
-  iconColor,
   title,
-  description,
+  detail,
   value,
 }) {
 
   return (
-
-    <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
+    <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--surface)/.1)] bg-[hsl(var(--surface)/.06)] px-3 py-3">
 
       <div className="flex items-center gap-3">
 
-        <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center">
-
-          <Icon className={`w-4 h-4 ${iconColor}`} />
-
-        </div>
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--surface)/.1)] text-[hsl(var(--amber))]">
+          <Icon size={15} />
+        </span>
 
         <div>
 
-          <p className="text-sm font-semibold">
+          <p className="text-[11px] font-bold">
             {title}
           </p>
 
-          <p className="text-xs text-slate-400">
-            {description}
+          <p className="mt-0.5 text-[9px] text-[hsl(var(--surface)/.55)]">
+            {detail}
           </p>
 
         </div>
 
       </div>
 
-      <span className="text-sm font-black">
+      <span className="mono text-sm">
         {value}
       </span>
 
     </div>
+  )
+}
 
+
+/* BRIEF ROW */
+
+function BriefRow({
+  color,
+  time,
+  text,
+}) {
+
+  const colorClass =
+    color === "coral"
+      ? "bg-[hsl(var(--coral))]"
+      : color === "amber"
+      ? "bg-[hsl(var(--amber))]"
+      : "bg-[hsl(var(--teal))]"
+
+  return (
+    <div className="flex gap-3 rounded-xl px-2 py-2.5 transition hover:bg-[hsl(var(--surface-muted)/.65)]">
+
+      <span
+        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${colorClass}`}
+      />
+
+      <div className="min-w-0">
+
+        <p className="text-[11px] leading-5 text-[hsl(var(--foreground))]">
+          {text}
+        </p>
+
+        <p className="mono mt-1 text-[9px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
+          {time} UTC
+        </p>
+
+      </div>
+
+    </div>
   )
 }
 
