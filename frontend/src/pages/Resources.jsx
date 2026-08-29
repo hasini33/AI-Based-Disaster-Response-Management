@@ -1,6 +1,4 @@
-import { useState } from "react"
-
-import { useNavigate } from "react-router-dom"
+import { useEffect, useState } from "react"
 import {
   Search,
   Package,
@@ -19,213 +17,487 @@ import {
   Boxes,
 } from "lucide-react"
 
-
-const resourcesData = [
-  {
-    id: 1,
-    name: "Food Packets",
-    category: "Food",
-    icon: "food",
-    available: 8420,
-    capacity: 12000,
-    unit: "packets",
-    location: "Guwahati Warehouse",
-    status: "Available",
-    lastUpdated: "10 min ago",
-  },
-  {
-    id: 2,
-    name: "Drinking Water",
-    category: "Water",
-    icon: "water",
-    available: 12000,
-    capacity: 15000,
-    unit: "liters",
-    location: "Patna Distribution Center",
-    status: "Available",
-    lastUpdated: "15 min ago",
-  },
-  {
-    id: 3,
-    name: "Medical Kits",
-    category: "Medical",
-    icon: "medical",
-    available: 1240,
-    capacity: 5000,
-    unit: "kits",
-    location: "Kolkata Medical Hub",
-    status: "Low Stock",
-    lastUpdated: "8 min ago",
-  },
-  {
-    id: 4,
-    name: "Shelter Capacity",
-    category: "Shelter",
-    icon: "shelter",
-    available: 2840,
-    capacity: 6000,
-    unit: "people",
-    location: "Bhubaneswar Relief Camp",
-    status: "Low Stock",
-    lastUpdated: "20 min ago",
-  },
-  {
-    id: 5,
-    name: "Rescue Equipment",
-    category: "Rescue",
-    icon: "rescue",
-    available: 1200,
-    capacity: 1500,
-    unit: "units",
-    location: "Hyderabad Emergency Hub",
-    status: "Available",
-    lastUpdated: "12 min ago",
-  },
-  {
-    id: 6,
-    name: "Emergency Food",
-    category: "Food",
-    icon: "food",
-    available: 2100,
-    capacity: 10000,
-    unit: "packets",
-    location: "Chennai Relief Center",
-    status: "Critical",
-    lastUpdated: "5 min ago",
-  },
-  {
-    id: 7,
-    name: "First Aid Kits",
-    category: "Medical",
-    icon: "medical",
-    available: 780,
-    capacity: 2500,
-    unit: "kits",
-    location: "Kochi Medical Center",
-    status: "Low Stock",
-    lastUpdated: "25 min ago",
-  },
-  {
-    id: 8,
-    name: "Temporary Shelters",
-    category: "Shelter",
-    icon: "shelter",
-    available: 4300,
-    capacity: 5000,
-    unit: "people",
-    location: "Ahmedabad Relief Camp",
-    status: "Available",
-    lastUpdated: "18 min ago",
-  },
-]
+import { getResources } from "../services/resourceService"
 
 
 function Resources() {
-  const navigate = useNavigate()
+  const [resourcesData, setResourcesData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("All")
   const [statusFilter, setStatusFilter] = useState("All")
   const [selectedResource, setSelectedResource] = useState(null)
-  
 
-  const filteredResources = resourcesData.filter((resource) => {
 
-    const search = searchTerm.toLowerCase()
+  // ======================================================
+  // LOAD RESOURCES FROM BACKEND
+  // ======================================================
 
-    const matchesSearch =
-      resource.name.toLowerCase().includes(search) ||
-      resource.category.toLowerCase().includes(search) ||
-      resource.location.toLowerCase().includes(search)
+  useEffect(() => {
 
-    const matchesCategory =
-      categoryFilter === "All" ||
-      resource.category === categoryFilter
+    async function loadResources() {
 
-    const matchesStatus =
-      statusFilter === "All" ||
-      resource.status === statusFilter
+      try {
+
+        setLoading(true)
+        setError("")
+
+        const data = await getResources()
+
+        // Convert backend format into the format
+        // expected by the existing UI.
+        const formattedResources = data.map((resource) => {
+
+          const category = getCategory(
+            resource.resource_type
+          )
+
+          const unit = getUnit(
+            resource.resource_type
+          )
+
+          const icon = getIconType(
+            resource.resource_type
+          )
+
+          const location =
+            resource.latitude !== null &&
+            resource.latitude !== undefined &&
+            resource.longitude !== null &&
+            resource.longitude !== undefined
+              ? `${resource.latitude}, ${resource.longitude}`
+              : "Location not specified"
+
+          const status = getDisplayStatus(
+              resource.status,
+              resource.capacity
+            )
+
+          return {
+            ...resource,
+
+            // UI-compatible fields
+            name: resource.resource_name,
+            category: category,
+            unit: unit,
+            icon: icon,
+            location: location,
+
+            // Backend currently provides only "capacity".
+            // We use it as current available stock.
+            available: Number(resource.capacity || 0),
+
+            // Backend does not currently provide
+            // a separate total/original capacity.
+            totalCapacity: Number(resource.capacity || 0),
+
+            status: status,
+
+            // Backend does not currently provide
+            // lastUpdated.
+            lastUpdated: "Current inventory",
+          }
+        })
+
+        setResourcesData(formattedResources)
+
+      } catch (err) {
+
+        console.error(
+          "Failed to load resources:",
+          err
+        )
+
+        setError(
+          err.message ||
+          "Unable to load resources."
+        )
+
+      } finally {
+
+        setLoading(false)
+
+      }
+
+    }
+
+    loadResources()
+
+  }, [])
+
+
+  // ======================================================
+  // CATEGORY
+  // ======================================================
+
+  function getCategory(resourceType) {
+
+    const categories = {
+
+      food: "Food",
+      water: "Water",
+      medical_kits: "Medical",
+      shelter: "Shelter",
+      ambulance: "Rescue",
+      hospital: "Medical",
+      relief_center: "Shelter",
+      other: "Other",
+
+    }
 
     return (
-      matchesSearch &&
-      matchesCategory &&
-      matchesStatus
+      categories[resourceType] ||
+      "Other"
     )
-  })
+  }
 
+
+  // ======================================================
+  // UNIT
+  // ======================================================
+
+  function getUnit(resourceType) {
+
+    const units = {
+
+      food: "packets",
+      water: "liters",
+      medical_kits: "kits",
+      shelter: "people",
+      ambulance: "units",
+      hospital: "units",
+      relief_center: "people",
+      other: "units",
+
+    }
+
+    return (
+      units[resourceType] ||
+      "units"
+    )
+  }
+
+
+  // ======================================================
+  // ICON TYPE
+  // ======================================================
+
+  function getIconType(resourceType) {
+
+    const icons = {
+
+      food: "food",
+      water: "water",
+      medical_kits: "medical",
+      shelter: "shelter",
+      ambulance: "rescue",
+      hospital: "medical",
+      relief_center: "shelter",
+      other: "rescue",
+
+    }
+
+    return (
+      icons[resourceType] ||
+      "rescue"
+    )
+  }
+
+
+  // ======================================================
+  // DISPLAY STATUS
+  // ======================================================
+
+  function getDisplayStatus(status, capacity) {
+
+  if (Number(capacity) === 0) {
+    return "Critical"
+  }
+
+  const normalized = status?.toLowerCase()
+
+  if (normalized === "available") {
+    return "Available"
+  }
+
+  if (normalized === "unavailable") {
+    return "Critical"
+  }
+
+  if (normalized === "maintenance") {
+    return "Low Stock"
+  }
+
+  if (normalized === "active") {
+    return "Available"
+  }
+
+  return "Critical"
+}
+
+  // ======================================================
+  // FILTERED RESOURCES
+  // ======================================================
+
+  const filteredResources =
+    resourcesData.filter((resource) => {
+
+      const search =
+        searchTerm.toLowerCase()
+
+      const name =
+        resource.name || ""
+
+      const category =
+        resource.category || "Other"
+
+      const location =
+        resource.location ||
+        "Location not specified"
+
+      const status =
+        resource.status || "Unknown"
+
+
+      const matchesSearch =
+        name
+          .toLowerCase()
+          .includes(search) ||
+
+        category
+          .toLowerCase()
+          .includes(search) ||
+
+        location
+          .toLowerCase()
+          .includes(search)
+
+
+      const matchesCategory =
+        categoryFilter === "All" ||
+        category === categoryFilter
+
+
+      const matchesStatus =
+        statusFilter === "All" ||
+        status === statusFilter
+
+
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesStatus
+      )
+
+    })
+
+
+  // ======================================================
+  // RESOURCE ICON
+  // ======================================================
 
   function getResourceIcon(type) {
 
     if (type === "food") {
-      return <Utensils className="w-5 h-5" />
+      return (
+        <Utensils className="w-7 h-7" />
+      )
     }
 
     if (type === "water") {
-      return <Droplets className="w-5 h-5" />
+      return (
+        <Droplets className="w-7 h-7" />
+      )
     }
 
     if (type === "medical") {
-      return <HeartPulse className="w-5 h-5" />
+      return (
+        <HeartPulse className="w-7 h-7" />
+      )
     }
 
     if (type === "shelter") {
-      return <House className="w-5 h-5" />
+      return (
+        <House className="w-7 h-7" />
+      )
     }
 
-    return <Truck className="w-5 h-5" />
+    return (
+      <Truck className="w-7 h-7" />
+    )
   }
 
+
+  // ======================================================
+  // STATUS STYLE
+  // ======================================================
 
   function getStatusStyle(status) {
 
     if (status === "Available") {
-      return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+
+      return (
+        "bg-green-100 dark:bg-green-900/30 " +
+        "text-green-700 dark:text-green-300"
+      )
+
     }
 
     if (status === "Low Stock") {
-      return "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300"
+
+      return (
+        "bg-orange-100 dark:bg-orange-900/30 " +
+        "text-orange-700 dark:text-orange-300"
+      )
+
     }
 
-    return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+    return (
+      "bg-red-100 dark:bg-red-900/30 " +
+      "text-red-700 dark:text-red-300"
+    )
   }
 
+
+  // ======================================================
+  // PROGRESS STYLE
+  // ======================================================
 
   function getProgressStyle(percentage) {
 
     if (percentage >= 60) {
-      return "bg-green-500"
+      return "bg-green-700"
     }
 
     if (percentage >= 30) {
-      return "bg-orange-500"
+      return "bg-orange-700"
     }
 
-    return "bg-red-500"
+    return "bg-red-700"
   }
 
 
+  // ======================================================
+  // CLEAR FILTERS
+  // ======================================================
+
   function clearFilters() {
+
     setSearchTerm("")
     setCategoryFilter("All")
     setStatusFilter("All")
+
   }
 
 
-  const totalResources = resourcesData.length
+  // ======================================================
+  // RESOURCE COUNTS
+  // ======================================================
+
+  const totalResources =
+    resourcesData.length
+
 
   const availableResources =
     resourcesData.filter(
-      (resource) => resource.status === "Available"
+      (resource) =>
+        resource.status === "Available"
     ).length
+
 
   const lowStockResources =
     resourcesData.filter(
-      (resource) => resource.status === "Low Stock"
+      (resource) =>
+        resource.status === "Low Stock"
     ).length
+
 
   const criticalResources =
     resourcesData.filter(
-      (resource) => resource.status === "Critical"
+      (resource) =>
+        resource.status === "Critical"
     ).length
+
+
+  // ======================================================
+  // LOADING
+  // ======================================================
+
+  if (loading) {
+
+    return (
+
+      <div className="flex items-center justify-center min-h-[400px]">
+
+        <div className="text-center">
+
+          <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
+
+          <p className="mt-4 text-gray-600 dark:text-gray-300">
+            Loading resources...
+          </p>
+
+        </div>
+
+      </div>
+
+    )
+
+  }
+
+
+  // ======================================================
+  // ERROR
+  // ======================================================
+
+  if (error) {
+
+    return (
+
+      <div className="space-y-5">
+
+        <div>
+
+          <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 font-medium mb-2">
+
+            <Package className="w-4 h-4" />
+
+            Resource Operations
+
+          </div>
+
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Resource Center
+          </h1>
+
+        </div>
+
+
+        <div className="bg-blue-50 dark:bg-blue-950 rounded-xl border border-red-400 dark:border-red-900 p-8 text-center">
+
+          <AlertTriangle className="w-10 h-10 text-red-500 mx-auto" />
+
+          <p className="text-red-600 dark:text-red-400 mt-3 font-medium">
+            Unable to load resources
+          </p>
+
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+            {error}
+          </p>
+
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+            Please make sure the backend is running.
+          </p>
+
+        </div>
+
+      </div>
+
+    )
+
+  }
 
 
   return (
@@ -440,7 +712,9 @@ function Resources() {
               type="text"
               placeholder="Search resource or location..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) =>
+                setSearchTerm(e.target.value)
+              }
               className="w-full border border-gray-300 dark:border-gray-600 bg-blue-100 dark:bg-blue-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
 
@@ -449,30 +723,62 @@ function Resources() {
 
           <select
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onChange={(e) =>
+              setCategoryFilter(e.target.value)
+            }
             className="border border-gray-300 dark:border-gray-600 bg-blue-100 dark:bg-blue-900 text-gray-900 dark:text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
 
-            <option value="All">All Categories</option>
-            <option value="Food">Food</option>
-            <option value="Water">Water</option>
-            <option value="Medical">Medical</option>
-            <option value="Shelter">Shelter</option>
-            <option value="Rescue">Rescue</option>
+            <option value="All">
+              All Categories
+            </option>
+
+            <option value="Food">
+              Food
+            </option>
+
+            <option value="Water">
+              Water
+            </option>
+
+            <option value="Medical">
+              Medical
+            </option>
+
+            <option value="Shelter">
+              Shelter
+            </option>
+
+            <option value="Rescue">
+              Rescue
+            </option>
 
           </select>
 
 
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) =>
+              setStatusFilter(e.target.value)
+            }
             className="border border-gray-300 dark:border-gray-600 bg-blue-100 dark:bg-blue-900 text-gray-900 dark:text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
 
-            <option value="All">All Stock Status</option>
-            <option value="Available">Available</option>
-            <option value="Low Stock">Low Stock</option>
-            <option value="Critical">Critical</option>
+            <option value="All">
+              All Stock Status
+            </option>
+
+            <option value="Available">
+              Available
+            </option>
+
+            <option value="Low Stock">
+              Low Stock
+            </option>
+
+            <option value="Critical">
+              Critical
+            </option>
 
           </select>
 
@@ -501,21 +807,44 @@ function Resources() {
 
       {/* RESOURCE CARDS */}
 
-<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+
         {filteredResources.length > 0 ? (
 
           filteredResources.map((resource) => {
 
-            const percentage =
-              Math.round(
-                (resource.available / resource.capacity) * 100
+            /*
+             * Backend currently provides only "capacity".
+             * Therefore available = capacity and totalCapacity = capacity.
+             *
+             * This prevents fake inventory numbers.
+             */
+
+            const available =
+              Number(resource.available || 0)
+
+            const capacity =
+              Number(
+                resource.totalCapacity ||
+                resource.capacity ||
+                0
               )
+
+            const percentage =
+              capacity > 0
+                ? Math.round(
+                    (available / capacity) * 100
+                  )
+                : 0
+
 
             return (
 
               <div
                 key={resource.id}
-              className="bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-400 dark:border-blue-900 shadow-sm p-4 hover:shadow-md transition-shadow">
+                className="bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-400 dark:border-blue-900 shadow-sm p-4 hover:shadow-md transition-shadow"
+              >
+
 
                 <div className="flex items-start justify-between">
 
@@ -523,9 +852,12 @@ function Resources() {
 
                     <div className="w-11 h-11 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
 
-                      {getResourceIcon(resource.icon)}
+                      {getResourceIcon(
+                        resource.icon
+                      )}
 
                     </div>
+
 
                     <div>
 
@@ -557,13 +889,13 @@ function Resources() {
 
                     <div>
 
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
                         Current Stock
                       </p>
 
                       <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
 
-                        {resource.available.toLocaleString()}
+                        {available.toLocaleString()}
 
                         <span className="text-sm font-medium text-gray-500 dark:text-gray-400 ml-1">
                           {resource.unit}
@@ -573,6 +905,7 @@ function Resources() {
 
                     </div>
 
+
                     <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">
                       {percentage}%
                     </span>
@@ -580,12 +913,15 @@ function Resources() {
                   </div>
 
 
-                  <div className="mt-3 h-2 bg-blue-200 dark:bg-blue-900 rounded-full overflow-hidden">
+                  <div className="mt-3 h-2 bg-blue-100 dark:bg-blue-900 rounded-full overflow-hidden">
 
                     <div
                       className={`h-full rounded-full ${getProgressStyle(percentage)}`}
                       style={{
-                        width: `${Math.min(percentage, 100)}%`,
+                        width: `${Math.min(
+                          percentage,
+                          100
+                        )}%`,
                       }}
                     />
 
@@ -594,12 +930,13 @@ function Resources() {
 
                   <div className="flex justify-between mt-2">
 
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-sm text-gray-400 dark:text-gray-500">
                       Available
                     </span>
 
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
-                      Capacity: {resource.capacity.toLocaleString()}
+                    <span className="text-sm text-gray-400 dark:text-gray-500">
+                      Capacity:{" "}
+                      {capacity.toLocaleString()}
                     </span>
 
                   </div>
@@ -619,6 +956,7 @@ function Resources() {
 
                   </div>
 
+
                   <span className="text-xs text-gray-400 dark:text-gray-500 ml-3 whitespace-nowrap">
                     {resource.lastUpdated}
                   </span>
@@ -629,8 +967,10 @@ function Resources() {
                 <div className="mt-4 flex items-center gap-3">
 
                   <button
-                    onClick={() => setSelectedResource(resource)}
-                    className="flex-1 inline-flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    onClick={() =>
+                      setSelectedResource(resource)
+                    }
+                    className="w-full inline-flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
 
                     View Details
@@ -639,21 +979,12 @@ function Resources() {
 
                   </button>
 
-
-                  <button
-  onClick={() => navigate("/allocation")}
-  className="flex-1 inline-flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
->
-  <Truck className="w-4 h-4" />
-
-  Allocate
-</button>
-
                 </div>
 
               </div>
 
             )
+
           })
 
         ) : (
@@ -695,9 +1026,12 @@ function Resources() {
 
                 <div className="w-11 h-11 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
 
-                  {getResourceIcon(selectedResource.icon)}
+                  {getResourceIcon(
+                    selectedResource.icon
+                  )}
 
                 </div>
+
 
                 <div>
 
@@ -715,7 +1049,9 @@ function Resources() {
 
 
               <button
-                onClick={() => setSelectedResource(null)}
+                onClick={() =>
+                  setSelectedResource(null)
+                }
                 className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200"
               >
 
@@ -738,7 +1074,11 @@ function Resources() {
                   </p>
 
                   <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
-                    {selectedResource.available.toLocaleString()}
+
+                    {Number(
+                      selectedResource.available || 0
+                    ).toLocaleString()}
+
                   </p>
 
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -755,7 +1095,11 @@ function Resources() {
                   </p>
 
                   <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
-                    {selectedResource.capacity.toLocaleString()}
+
+                    {Number(
+                      selectedResource.capacity || 0
+                    ).toLocaleString()}
+
                   </p>
 
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -819,17 +1163,10 @@ function Resources() {
 
               </div>
 
-
               <button
-                onClick={() => setSelectedResource(null)}
-                className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-              >
-                Allocate Resource
-              </button>
-
-
-              <button
-                onClick={() => setSelectedResource(null)}
+                onClick={() =>
+                  setSelectedResource(null)
+                }
                 className="w-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-2.5 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 Close
@@ -844,7 +1181,9 @@ function Resources() {
       )}
 
     </div>
+
   )
+
 }
 
 
