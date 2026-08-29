@@ -11,56 +11,161 @@ import {
   TrendingUp,
   CalendarDays,
   RefreshCw,
+  FileText,
+  ClipboardList,
+  CheckCircle2,
 } from "lucide-react"
 
 import { getDisasters } from "../services/disasterService"
+import { getZones } from "../services/zoneService"
+import { getResources } from "../services/resourceService"
 
 
 function Reports() {
 
+  // =========================================================
+  // STATE
+  // =========================================================
+
   const [disasters, setDisasters] = useState([])
+  const [zones, setZones] = useState([])
+  const [resources, setResources] = useState([])
+
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
   const [selectedPeriod, setSelectedPeriod] = useState("All")
 
 
   // =========================================================
-  // LOAD DISASTER DATA
+  // LOAD REPORT DATA FROM BACKEND
   // =========================================================
 
-  useEffect(() => {
+  async function loadReports() {
 
-    async function loadReports() {
+    try {
 
-      try {
+      setLoading(true)
+      setError("")
 
-        const data = await getDisasters()
+      const [
+        disasterData,
+        zoneData,
+        resourceData,
+      ] = await Promise.all([
+        getDisasters(),
+        getZones(),
+        getResources(),
+      ])
 
-        console.log("Report data:", data)
+      console.log(
+        "Report disasters:",
+        disasterData
+      )
 
-        setDisasters(
-          Array.isArray(data)
-            ? data
-            : []
-        )
+      console.log(
+        "Report zones:",
+        zoneData
+      )
 
-      } catch (error) {
+      console.log(
+        "Report resources:",
+        resourceData
+      )
 
-        console.error(
-          "Failed to load report data:",
-          error
-        )
+      setDisasters(
+        Array.isArray(disasterData)
+          ? disasterData
+          : []
+      )
 
-      } finally {
+      setZones(
+        Array.isArray(zoneData)
+          ? zoneData
+          : []
+      )
 
-        setLoading(false)
+      setResources(
+        Array.isArray(resourceData)
+          ? resourceData
+          : []
+      )
 
-      }
+    } catch (err) {
+
+      console.error(
+        "Failed to load report data:",
+        err
+      )
+
+      setError(
+        err?.message ||
+        "Unable to load report data"
+      )
+
+    } finally {
+
+      setLoading(false)
 
     }
+
+  }
+
+
+  useEffect(() => {
 
     loadReports()
 
   }, [])
+
+
+  // =========================================================
+  // FILTER DISASTERS
+  // =========================================================
+
+  const filteredDisasters = useMemo(() => {
+
+    if (selectedPeriod === "All") {
+      return disasters
+    }
+
+    const now = new Date()
+
+    const sevenDaysAgo = new Date(
+      now.getTime() -
+      7 * 24 * 60 * 60 * 1000
+    )
+
+    return disasters.filter((disaster) => {
+
+      const dateValue =
+        disaster.event_date ||
+        disaster.eventDate ||
+        disaster.time
+
+      if (!dateValue) {
+        return true
+      }
+
+      const eventDate =
+        new Date(dateValue)
+
+      if (
+        Number.isNaN(
+          eventDate.getTime()
+        )
+      ) {
+        return true
+      }
+
+      return eventDate >= sevenDaysAgo
+
+    })
+
+  }, [
+    disasters,
+    selectedPeriod,
+  ])
 
 
   // =========================================================
@@ -69,40 +174,46 @@ function Reports() {
 
   const reportData = useMemo(() => {
 
-    const total = disasters.length
+    const total =
+      filteredDisasters.length
 
 
-    const critical = disasters.filter(
-      (d) =>
-        Number(d.severity) >= 8
-    ).length
+    const critical =
+      filteredDisasters.filter(
+        (d) =>
+          Number(d.severity) >= 8
+      ).length
 
 
-    const high = disasters.filter(
-      (d) =>
-        Number(d.severity) >= 6 &&
-        Number(d.severity) < 8
-    ).length
+    const high =
+      filteredDisasters.filter(
+        (d) =>
+          Number(d.severity) >= 6 &&
+          Number(d.severity) < 8
+      ).length
 
 
-    const medium = disasters.filter(
-      (d) =>
-        Number(d.severity) >= 4 &&
-        Number(d.severity) < 6
-    ).length
+    const medium =
+      filteredDisasters.filter(
+        (d) =>
+          Number(d.severity) >= 4 &&
+          Number(d.severity) < 6
+      ).length
 
 
-    const low = disasters.filter(
-      (d) =>
-        Number(d.severity) >= 1 &&
-        Number(d.severity) < 4
-    ).length
+    const low =
+      filteredDisasters.filter(
+        (d) =>
+          Number(d.severity) >= 1 &&
+          Number(d.severity) < 4
+      ).length
 
 
-    const rated = disasters.filter(
-      (d) =>
-        Number(d.severity) > 0
-    )
+    const rated =
+      filteredDisasters.filter(
+        (d) =>
+          Number(d.severity) > 0
+      )
 
 
     const averageSeverity =
@@ -117,37 +228,483 @@ function Reports() {
         : "0.0"
 
 
+    // =======================================================
+    // MOST COMMON DISASTER TYPE
+    // =======================================================
+
     const types = {}
 
+    filteredDisasters.forEach(
+      (disaster) => {
 
-    disasters.forEach((disaster) => {
+        const type =
+          disaster.disaster_type ||
+          disaster.type ||
+          "Unknown"
 
-      const type =
-        disaster.type || "Unknown"
+        types[type] =
+          (types[type] || 0) + 1
 
-      types[type] =
-        (types[type] || 0) + 1
-
-    })
+      }
+    )
 
 
     const topDisasterType =
       Object.entries(types).sort(
-        (a, b) => b[1] - a[1]
-      )[0] || ["No data", 0]
+        (a, b) =>
+          b[1] - a[1]
+      )[0] || [
+        "No data",
+        0,
+      ]
+
+
+    // =======================================================
+    // AFFECTED POPULATION
+    // =======================================================
+
+    const affectedPopulation =
+      zones.reduce(
+        (
+          totalAffected,
+          zone
+        ) => {
+
+          const population =
+            Number(
+              zone.estimated_population ||
+              0
+            )
+
+          const damage =
+            Number(
+              zone.damage_percent ||
+              0
+            )
+
+          const affected =
+            population *
+            damage /
+            100
+
+          return (
+            totalAffected +
+            affected
+          )
+
+        },
+        0
+      )
+
+
+    // =======================================================
+    // PRIORITY ZONES
+    // =======================================================
+
+    const priorityZones =
+      zones.filter(
+        (zone) => {
+
+          const severity =
+            Number(
+              zone.severity_score ||
+              0
+            )
+
+          const priority =
+            Number(
+              zone.priority_override ||
+              0
+            )
+
+          return (
+            severity >= 6 ||
+            priority >= 4
+          )
+
+        }
+      ).length
+
+
+    // =======================================================
+    // RESOURCE COUNT
+    // =======================================================
+
+    const resourceTypes =
+      new Set()
+
+    resources.forEach(
+      (resource) => {
+
+        const type =
+          resource.resource_type ||
+          resource.type ||
+          resource.name
+
+        if (type) {
+          resourceTypes.add(type)
+        }
+
+      }
+    )
+
+
+    const resourcesTracked =
+      resourceTypes.size > 0
+        ? resourceTypes.size
+        : resources.length
 
 
     return {
+
       total,
       critical,
       high,
       medium,
       low,
+
       averageSeverity,
+
       topDisasterType,
+
+      affectedPopulation,
+
+      priorityZones,
+
+      resourcesTracked,
+
     }
 
-  }, [disasters])
+  }, [
+    filteredDisasters,
+    zones,
+    resources,
+  ])
+
+
+  // =========================================================
+  // POST-EVENT ANALYTICS
+  // =========================================================
+
+  const postEventAnalytics = useMemo(() => {
+
+    const totalEvents =
+      filteredDisasters.length
+
+
+    const criticalEvents =
+      filteredDisasters.filter(
+        (disaster) =>
+          Number(
+            disaster.severity
+          ) >= 8
+      ).length
+
+
+    const highEvents =
+      filteredDisasters.filter(
+        (disaster) =>
+          Number(
+            disaster.severity
+          ) >= 6 &&
+          Number(
+            disaster.severity
+          ) < 8
+      ).length
+
+
+    const ratedEvents =
+      filteredDisasters.filter(
+        (disaster) =>
+          Number(
+            disaster.severity
+          ) > 0
+      )
+
+
+    const averageSeverity =
+      ratedEvents.length > 0
+        ? (
+            ratedEvents.reduce(
+              (
+                sum,
+                disaster
+              ) =>
+                sum +
+                Number(
+                  disaster.severity
+                ),
+              0
+            ) /
+            ratedEvents.length
+          ).toFixed(1)
+        : "0.0"
+
+
+    const completedEvents =
+      filteredDisasters.filter(
+        (disaster) => {
+
+          const status =
+            String(
+              disaster.status ||
+              ""
+            ).toLowerCase()
+
+          return (
+            status === "completed" ||
+            status === "resolved" ||
+            status === "closed"
+          )
+
+        }
+      ).length
+
+
+    const totalZoneCount =
+      zones.length
+
+
+    const affectedZoneCount =
+      zones.filter(
+        (zone) =>
+          Number(
+            zone.damage_percent ||
+            0
+          ) > 0
+      ).length
+
+
+    const highestSeverity =
+      ratedEvents.length > 0
+        ? Math.max(
+            ...ratedEvents.map(
+              (disaster) =>
+                Number(
+                  disaster.severity
+                )
+            )
+          )
+        : 0
+
+
+    const coveragePercent =
+      totalZoneCount > 0
+        ? Math.round(
+            (
+              affectedZoneCount /
+              totalZoneCount
+            ) * 100
+          )
+        : 0
+
+
+    let overallStatus =
+      "Stable"
+
+    if (
+      criticalEvents > 0
+    ) {
+
+      overallStatus =
+        "Critical"
+
+    } else if (
+      highEvents > 0
+    ) {
+
+      overallStatus =
+        "High Alert"
+
+    } else if (
+      totalEvents > 0
+    ) {
+
+      overallStatus =
+        "Active"
+
+    }
+
+
+    return {
+
+      totalEvents,
+
+      criticalEvents,
+
+      highEvents,
+
+      averageSeverity,
+
+      completedEvents,
+
+      totalZoneCount,
+
+      affectedZoneCount,
+
+      highestSeverity,
+
+      coveragePercent,
+
+      overallStatus,
+
+    }
+
+  }, [
+    filteredDisasters,
+    zones,
+  ])
+
+
+  // =========================================================
+  // GENERATE SITUATION REPORT
+  // =========================================================
+
+  function generateSituationReport() {
+
+    const reportDate =
+      new Date().toLocaleString()
+
+    const lines = [
+
+      "DISASTER RESPONSE SITUATION REPORT",
+      "===================================",
+      "",
+      `Generated: ${reportDate}`,
+      `Reporting Scope: ${
+        selectedPeriod === "All"
+          ? "All Records"
+          : "Current Events"
+      }`,
+      "",
+      "1. EXECUTIVE SUMMARY",
+      "--------------------",
+      `Overall Status: ${
+        postEventAnalytics.overallStatus
+      }`,
+      `Total Disaster Events: ${
+        postEventAnalytics.totalEvents
+      }`,
+      `Critical Events: ${
+        postEventAnalytics.criticalEvents
+      }`,
+      `High Severity Events: ${
+        postEventAnalytics.highEvents
+      }`,
+      `Average Severity: ${
+        postEventAnalytics.averageSeverity
+      } / 10`,
+      "",
+      "2. IMPACT ASSESSMENT",
+      "--------------------",
+      `Affected Population: ${
+        Math.round(
+          reportData.affectedPopulation
+        ).toLocaleString()
+      }`,
+      `Affected Zones: ${
+        postEventAnalytics.affectedZoneCount
+      }`,
+      `Total Zones Monitored: ${
+        postEventAnalytics.totalZoneCount
+      }`,
+      `Zone Impact Coverage: ${
+        postEventAnalytics.coveragePercent
+      }%`,
+      `Highest Recorded Severity: ${
+        postEventAnalytics.highestSeverity
+      } / 10`,
+      "",
+      "3. DISASTER PROFILE",
+      "-------------------",
+      `Most Reported Disaster Type: ${
+        reportData.topDisasterType[0]
+      }`,
+      `Recorded Events of Top Type: ${
+        reportData.topDisasterType[1]
+      }`,
+      "",
+      "4. RESPONSE SNAPSHOT",
+      "--------------------",
+      `Resources Tracked: ${
+        reportData.resourcesTracked
+      }`,
+      `Priority Zones: ${
+        reportData.priorityZones
+      }`,
+      `Completed/Resolved Events: ${
+        postEventAnalytics.completedEvents
+      }`,
+      "",
+      "5. SEVERITY DISTRIBUTION",
+      "------------------------",
+      `Critical: ${
+        reportData.critical
+      }`,
+      `High: ${
+        reportData.high
+      }`,
+      `Medium: ${
+        reportData.medium
+      }`,
+      `Low: ${
+        reportData.low
+      }`,
+      "",
+      "6. OPERATIONAL ASSESSMENT",
+      "-------------------------",
+      postEventAnalytics.criticalEvents > 0
+        ? "Immediate attention remains required for critical events."
+        : "No critical events are currently recorded.",
+      postEventAnalytics.affectedZoneCount > 0
+        ? "Affected zones require continued monitoring and response coordination."
+        : "No affected zones are currently recorded.",
+      reportData.priorityZones > 0
+        ? "Priority zones should remain under active response monitoring."
+        : "No high-priority zones are currently identified.",
+      "",
+      "END OF SITUATION REPORT",
+      "Generated from the disaster response system data.",
+    ]
+
+
+    const reportText =
+      lines.join("\n")
+
+
+    const blob =
+      new Blob(
+        [reportText],
+        {
+          type:
+            "text/plain;charset=utf-8;",
+        }
+      )
+
+
+    const url =
+      URL.createObjectURL(blob)
+
+
+    const link =
+      document.createElement("a")
+
+
+    link.href = url
+
+    link.download =
+      "post-event-situation-report.txt"
+
+
+    document.body.appendChild(link)
+
+    link.click()
+
+    document.body.removeChild(link)
+
+    URL.revokeObjectURL(url)
+
+  }
 
 
   // =========================================================
@@ -156,12 +713,17 @@ function Reports() {
 
   function downloadReport() {
 
-    if (!disasters.length) {
+    if (
+      !filteredDisasters.length
+    ) {
+
       return
+
     }
 
 
     const headers = [
+
       "Disaster ID",
       "Type",
       "Country",
@@ -170,48 +732,78 @@ function Reports() {
       "Alert Level",
       "Latitude",
       "Longitude",
+      "Event Date",
+
     ]
 
 
     const rows =
-      disasters.map((disaster) => [
+      filteredDisasters.map(
+        (disaster) => [
 
-        disaster.id ?? "",
-        disaster.type ?? "",
-        disaster.country ?? "",
-        disaster.location ?? "",
-        disaster.severity ?? "",
-        disaster.alert_level ?? "",
-        disaster.latitude ?? "",
-        disaster.longitude ?? "",
+          disaster.id ?? "",
 
-      ])
+          disaster.disaster_type ??
+          disaster.type ??
+          "",
+
+          disaster.country ??
+          "",
+
+          disaster.location ??
+          "",
+
+          disaster.severity ??
+          "",
+
+          disaster.alert_level ??
+          disaster.alertLevel ??
+          "",
+
+          disaster.latitude ??
+          "",
+
+          disaster.longitude ??
+          "",
+
+          disaster.event_date ??
+          disaster.eventDate ??
+          "",
+
+        ]
+      )
 
 
     const csvContent = [
 
       headers.join(","),
 
-      ...rows.map((row) =>
-        row
-          .map((value) =>
-            `"${String(value).replace(
-              /"/g,
-              '""'
-            )}"`
-          )
-          .join(",")
+      ...rows.map(
+        (row) =>
+          row
+            .map(
+              (value) =>
+                `"${String(
+                  value
+                ).replace(
+                  /"/g,
+                  '""'
+                )}"`
+            )
+            .join(",")
       ),
 
     ].join("\n")
 
 
-    const blob = new Blob(
-      [csvContent],
-      {
-        type: "text/csv;charset=utf-8;",
-      }
-    )
+    const blob =
+      new Blob(
+        [csvContent],
+        {
+          type:
+            "text/csv;charset=utf-8;",
+        }
+      )
 
 
     const url =
@@ -291,6 +883,109 @@ function Reports() {
 
 
   // =========================================================
+  // ERROR
+  // =========================================================
+
+  if (error) {
+
+    return (
+
+      <div className="
+        min-h-96
+        flex
+        items-center
+        justify-center
+        bg-sky-50
+        dark:bg-slate-950
+        rounded-xl
+        px-6
+      ">
+
+        <div className="text-center">
+
+          <div className="
+            w-12
+            h-12
+            mx-auto
+            rounded-xl
+            bg-red-100
+            dark:bg-red-950/50
+            flex
+            items-center
+            justify-center
+          ">
+
+            <TriangleAlert
+              className="
+                w-6
+                h-6
+                text-red-600
+                dark:text-red-400
+              "
+            />
+
+          </div>
+
+
+          <h2 className="
+            mt-4
+            text-lg
+            font-bold
+            text-slate-900
+            dark:text-white
+          ">
+
+            Unable to load reports
+
+          </h2>
+
+
+          <p className="
+            mt-2
+            text-sm
+            text-slate-500
+            dark:text-slate-400
+          ">
+
+            {error}
+
+          </p>
+
+
+          <button
+            onClick={loadReports}
+            className="
+              mt-5
+              inline-flex
+              items-center
+              gap-2
+              bg-blue-600
+              hover:bg-blue-700
+              text-white
+              px-4
+              py-2.5
+              rounded-lg
+              text-sm
+              font-semibold
+            "
+          >
+
+            <RefreshCw className="w-4 h-4" />
+
+            Retry
+
+          </button>
+
+        </div>
+
+      </div>
+
+    )
+
+  }
+
+
+  // =========================================================
   // MAIN UI
   // =========================================================
 
@@ -332,7 +1027,10 @@ function Reports() {
 
             <FileBarChart className="w-5 h-5" />
 
-            <span className="text-sm font-semibold">
+            <span className="
+              text-sm
+              font-semibold
+            ">
 
               Response Intelligence
 
@@ -415,16 +1113,21 @@ function Reports() {
           </select>
 
 
-          {/* EXPORT */}
+          {/* EXPORT CSV */}
 
           <button
             onClick={downloadReport}
+            disabled={
+              filteredDisasters.length === 0
+            }
             className="
               inline-flex
               items-center
               gap-2
               bg-blue-600
               hover:bg-blue-700
+              disabled:bg-slate-400
+              disabled:cursor-not-allowed
               text-white
               px-4
               py-2.5
@@ -460,8 +1163,6 @@ function Reports() {
       ">
 
 
-        {/* TOTAL EVENTS */}
-
         <SummaryCard
           label="Total Events"
           value={reportData.total}
@@ -487,8 +1188,6 @@ function Reports() {
         />
 
 
-        {/* CRITICAL EVENTS */}
-
         <SummaryCard
           label="Critical Events"
           value={reportData.critical}
@@ -513,8 +1212,6 @@ function Reports() {
           "
         />
 
-
-        {/* AVERAGE SEVERITY */}
 
         <SummaryCard
           label="Average Severity"
@@ -555,8 +1252,6 @@ function Reports() {
           "
         />
 
-
-        {/* MOST COMMON */}
 
         <SummaryCard
           label="Most Reported Type"
@@ -602,9 +1297,7 @@ function Reports() {
       ">
 
 
-        {/* ===================================================
-            SEVERITY DISTRIBUTION
-        =================================================== */}
+        {/* SEVERITY DISTRIBUTION */}
 
         <div className="
           lg:col-span-2
@@ -617,9 +1310,6 @@ function Reports() {
           shadow-sm
           overflow-hidden
         ">
-
-
-          {/* HEADER */}
 
           <div className="
             px-5
@@ -656,15 +1346,16 @@ function Reports() {
           </div>
 
 
-          {/* BARS */}
-
-          <div className="p-5 space-y-5">
+          <div className="
+            p-5
+            space-y-5
+          ">
 
             <SeverityBar
               label="Critical"
               value={reportData.critical}
               total={reportData.total}
-              color="bg-red-500"
+              color="bg-red-700"
               textColor="
                 text-red-600
                 dark:text-red-400
@@ -676,7 +1367,7 @@ function Reports() {
               label="High"
               value={reportData.high}
               total={reportData.total}
-              color="bg-orange-500"
+              color="bg-orange-700"
               textColor="
                 text-orange-600
                 dark:text-orange-400
@@ -688,7 +1379,7 @@ function Reports() {
               label="Medium"
               value={reportData.medium}
               total={reportData.total}
-              color="bg-yellow-500"
+              color="bg-yellow-700"
               textColor="
                 text-yellow-600
                 dark:text-yellow-400
@@ -712,9 +1403,7 @@ function Reports() {
         </div>
 
 
-        {/* ===================================================
-            RESPONSE SNAPSHOT
-        =================================================== */}
+        {/* RESPONSE SNAPSHOT */}
 
         <div className="
           bg-blue-50
@@ -727,8 +1416,6 @@ function Reports() {
           overflow-hidden
         ">
 
-
-          {/* HEADER */}
 
           <div className="
             px-5
@@ -764,9 +1451,10 @@ function Reports() {
           </div>
 
 
-          {/* METRICS */}
-
-          <div className="p-5 space-y-4">
+          <div className="
+            p-5
+            space-y-4
+          ">
 
             <ReportMetric
               icon={
@@ -780,7 +1468,11 @@ function Reports() {
                 />
               }
               label="Affected Population"
-              value="24,580"
+              value={
+                Math.round(
+                  reportData.affectedPopulation
+                ).toLocaleString()
+              }
               description="Estimated people"
             />
 
@@ -797,7 +1489,9 @@ function Reports() {
                 />
               }
               label="Resources Tracked"
-              value="8"
+              value={
+                reportData.resourcesTracked
+              }
               description="Inventory categories"
             />
 
@@ -815,10 +1509,9 @@ function Reports() {
               }
               label="Priority Zones"
               value={
-                reportData.critical +
-                reportData.high
+                reportData.priorityZones
               }
-              description="High + critical events"
+              description="High priority zones"
             />
 
 
@@ -837,6 +1530,463 @@ function Reports() {
               value="Live"
               description="Backend connected"
             />
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      {/* =====================================================
+          POST-EVENT ANALYTICS / SITUATION REPORT
+      ===================================================== */}
+
+      <div className="
+        bg-blue-50
+        dark:bg-slate-900
+        rounded-xl
+        border
+        border-blue-200
+        dark:border-slate-800
+        shadow-sm
+        overflow-hidden
+      ">
+
+
+        {/* HEADER */}
+
+        <div className="
+          px-5
+          py-4
+          border-b
+          border-blue-200
+          dark:border-slate-800
+          flex
+          flex-col
+          md:flex-row
+          md:items-center
+          md:justify-between
+          gap-4
+        ">
+
+          <div>
+
+            <div className="
+              flex
+              items-center
+              gap-2
+            ">
+
+              <ClipboardList className="
+                w-5
+                h-5
+                text-blue-600
+                dark:text-blue-400
+              " />
+
+              <h2 className="
+                text-lg
+                font-semibold
+                text-slate-900
+                dark:text-white
+              ">
+
+                Post-Event Analytics
+
+              </h2>
+
+            </div>
+
+
+            <p className="
+              text-sm
+              text-slate-500
+              dark:text-slate-400
+              mt-1
+            ">
+
+              Situation report generated from the latest
+              disaster response data.
+
+            </p>
+
+          </div>
+
+
+          {/* GENERATE SITREP */}
+
+          <button
+            onClick={
+              generateSituationReport
+            }
+            className="
+              inline-flex
+              items-center
+              justify-center
+              gap-2
+              bg-blue-600
+              hover:bg-blue-700
+              text-white
+              px-4
+              py-2.5
+              rounded-lg
+              text-sm
+              font-semibold
+              shadow-sm
+              transition
+            "
+          >
+
+            <FileText className="
+              w-4
+              h-4
+            " />
+
+            Generate Situation Report
+
+          </button>
+
+        </div>
+
+
+        {/* ANALYTICS */}
+
+        <div className="
+          p-5
+        ">
+
+          <div className="
+            grid
+            grid-cols-1
+            sm:grid-cols-2
+            lg:grid-cols-4
+            gap-4
+          ">
+
+
+            {/* STATUS */}
+
+            <AnalyticsCard
+              icon={
+                <Activity className="
+                  w-5
+                  h-5
+                  text-blue-600
+                  dark:text-blue-400
+                " />
+              }
+              label="Overall Status"
+              value={
+                postEventAnalytics.overallStatus
+              }
+              description="Current response assessment"
+            />
+
+
+            {/* EVENTS */}
+
+            <AnalyticsCard
+              icon={
+                <TriangleAlert className="
+                  w-5
+                  h-5
+                  text-red-600
+                  dark:text-red-400
+                " />
+              }
+              label="Events Reviewed"
+              value={
+                postEventAnalytics.totalEvents
+              }
+              description="Events included in analysis"
+            />
+
+
+            {/* ZONES */}
+
+            <AnalyticsCard
+              icon={
+                <ShieldAlert className="
+                  w-5
+                  h-5
+                  text-orange-600
+                  dark:text-orange-400
+                " />
+              }
+              label="Affected Zones"
+              value={
+                postEventAnalytics.affectedZoneCount
+              }
+              description={`
+                ${postEventAnalytics.coveragePercent}%
+                of monitored zones
+              `}
+            />
+
+
+            {/* COMPLETED */}
+
+            <AnalyticsCard
+              icon={
+                <CheckCircle2 className="
+                  w-5
+                  h-5
+                  text-green-600
+                  dark:text-green-400
+                " />
+              }
+              label="Completed / Resolved"
+              value={
+                postEventAnalytics.completedEvents
+              }
+              description="Recorded resolved events"
+            />
+
+          </div>
+
+
+          {/* SITREP SUMMARY */}
+
+          <div className="
+            mt-5
+            grid
+            grid-cols-1
+            lg:grid-cols-3
+            gap-4
+          ">
+
+
+            {/* EXECUTIVE SUMMARY */}
+
+            <div className="
+              lg:col-span-2
+              rounded-lg
+              border
+              border-blue-200
+              dark:border-slate-700
+              bg-blue-100/50
+              dark:bg-slate-800/60
+              p-4
+            ">
+
+              <div className="
+                flex
+                items-center
+                gap-2
+                mb-3
+              ">
+
+                <FileText className="
+                  w-4
+                  h-4
+                  text-blue-600
+                  dark:text-blue-400
+                " />
+
+                <h3 className="
+                  text-sm
+                  font-semibold
+                  text-slate-900
+                  dark:text-white
+                ">
+
+                  Situation Summary
+
+                </h3>
+
+              </div>
+
+
+              <p className="
+                text-sm
+                leading-6
+                text-slate-600
+                dark:text-slate-300
+              ">
+
+                The current assessment covers{" "}
+
+                <span className="
+                  font-semibold
+                  text-slate-900
+                  dark:text-white
+                ">
+
+                  {postEventAnalytics.totalEvents}
+
+                </span>
+
+                {" "}recorded disaster events across{" "}
+
+                <span className="
+                  font-semibold
+                  text-slate-900
+                  dark:text-white
+                ">
+
+                  {postEventAnalytics.affectedZoneCount}
+
+                </span>
+
+                {" "}affected zones. The average recorded
+                severity is{" "}
+
+                <span className="
+                  font-semibold
+                  text-slate-900
+                  dark:text-white
+                ">
+
+                  {postEventAnalytics.averageSeverity}
+                  /10
+
+                </span>
+
+                . The highest recorded severity is{" "}
+
+                <span className="
+                  font-semibold
+                  text-slate-900
+                  dark:text-white
+                ">
+
+                  {postEventAnalytics.highestSeverity}
+                  /10
+
+                </span>
+
+                . The most frequently reported disaster
+                type is{" "}
+
+                <span className="
+                  font-semibold
+                  text-blue-600
+                  dark:text-blue-400
+                ">
+
+                  {reportData.topDisasterType[0]}
+
+                </span>
+
+                .
+
+              </p>
+
+            </div>
+
+
+            {/* RESPONSE ASSESSMENT */}
+
+            <div className="
+              rounded-lg
+              border
+              border-blue-200
+              dark:border-slate-700
+              bg-blue-100/50
+              dark:bg-slate-800/60
+              p-4
+            ">
+
+              <div className="
+                flex
+                items-center
+                gap-2
+                mb-3
+              ">
+
+                <Activity className="
+                  w-4
+                  h-4
+                  text-green-600
+                  dark:text-green-400
+                " />
+
+                <h3 className="
+                  text-sm
+                  font-semibold
+                  text-slate-900
+                  dark:text-white
+                ">
+
+                  Response Assessment
+
+                </h3>
+
+              </div>
+
+
+              <div className="
+                space-y-3
+              ">
+
+
+                <AssessmentRow
+                  label="Critical Events"
+                  value={
+                    postEventAnalytics.criticalEvents
+                  }
+                />
+
+
+                <AssessmentRow
+                  label="Priority Zones"
+                  value={
+                    reportData.priorityZones
+                  }
+                />
+
+
+                <AssessmentRow
+                  label="Resources Tracked"
+                  value={
+                    reportData.resourcesTracked
+                  }
+                />
+
+
+                <AssessmentRow
+                  label="Impact Coverage"
+                  value={`
+                    ${postEventAnalytics.coveragePercent}%
+                  `}
+                />
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* NOTE */}
+
+          <div className="
+            mt-4
+            flex
+            items-start
+            gap-2
+            text-xs
+            text-slate-500
+            dark:text-slate-400
+          ">
+
+            <Activity className="
+              w-4
+              h-4
+              shrink-0
+              mt-0.5
+            " />
+
+            <p>
+
+              The situation report is generated locally from
+              the disaster, zone and resource data already
+              loaded by this Reports page. It can later be
+              connected to a dedicated backend report service
+              when one is available.
+
+            </p>
 
           </div>
 
@@ -904,9 +2054,6 @@ function Reports() {
 
           <table className="w-full">
 
-
-            {/* TABLE HEAD */}
-
             <thead className="
               bg-blue-100
               dark:bg-slate-800
@@ -920,34 +2067,34 @@ function Reports() {
                   "Country",
                   "Location",
                   "Severity",
-                ].map((heading) => (
+                ].map(
+                  (heading) => (
 
-                  <th
-                    key={heading}
-                    className="
-                      text-left
-                      px-5
-                      py-3
-                      text-xs
-                      font-semibold
-                      text-slate-600
-                      dark:text-slate-400
-                      uppercase
-                    "
-                  >
+                    <th
+                      key={heading}
+                      className="
+                        text-left
+                        px-5
+                        py-3
+                        text-xs
+                        font-semibold
+                        text-slate-600
+                        dark:text-slate-400
+                        uppercase
+                      "
+                    >
 
-                    {heading}
+                      {heading}
 
-                  </th>
+                    </th>
 
-                ))}
+                  )
+                )}
 
               </tr>
 
             </thead>
 
-
-            {/* TABLE BODY */}
 
             <tbody className="
               divide-y
@@ -956,96 +2103,122 @@ function Reports() {
             ">
 
 
-              {disasters
+              {filteredDisasters
                 .slice(0, 10)
-                .map((disaster) => (
+                .map(
+                  (disaster) => (
 
-                  <tr
-                    key={disaster.id}
+                    <tr
+                      key={
+                        disaster.id
+                      }
+                      className="
+                        hover:bg-blue-100/70
+                        dark:hover:bg-slate-800/60
+                        transition
+                      "
+                    >
+
+                      <td className="
+                        px-5
+                        py-4
+                        text-sm
+                        font-medium
+                        text-slate-900
+                        dark:text-white
+                      ">
+
+                        #{disaster.id}
+
+                      </td>
+
+
+                      <td className="
+                        px-5
+                        py-4
+                        text-sm
+                        text-slate-700
+                        dark:text-slate-300
+                      ">
+
+                        {disaster.disaster_type ||
+                         disaster.type ||
+                         "Unknown"}
+
+                      </td>
+
+
+                      <td className="
+                        px-5
+                        py-4
+                        text-sm
+                        text-slate-700
+                        dark:text-slate-300
+                      ">
+
+                        {disaster.country ||
+                         "—"}
+
+                      </td>
+
+
+                      <td className="
+                        px-5
+                        py-4
+                        text-sm
+                        text-slate-700
+                        dark:text-slate-300
+                      ">
+
+                        {disaster.location ||
+                         "—"}
+
+                      </td>
+
+
+                      <td className="
+                        px-5
+                        py-4
+                      ">
+
+                        <SeverityBadge
+                          severity={
+                            disaster.severity
+                          }
+                        />
+
+                      </td>
+
+                    </tr>
+
+                  )
+                )}
+
+
+              {filteredDisasters.length === 0 && (
+
+                <tr>
+
+                  <td
+                    colSpan={5}
                     className="
-                      hover:bg-blue-100/70
-                      dark:hover:bg-slate-800/60
-                      transition
+                      px-5
+                      py-10
+                      text-center
+                      text-sm
+                      text-slate-500
+                      dark:text-slate-400
                     "
                   >
 
+                    No disaster records available
+                    for this period.
 
-                    {/* ID */}
+                  </td>
 
-                    <td className="
-                      px-5
-                      py-4
-                      text-sm
-                      font-medium
-                      text-slate-900
-                      dark:text-white
-                    ">
+                </tr>
 
-                      #{disaster.id}
-
-                    </td>
-
-
-                    {/* TYPE */}
-
-                    <td className="
-                      px-5
-                      py-4
-                      text-sm
-                      text-slate-700
-                      dark:text-slate-300
-                    ">
-
-                      {disaster.type || "Unknown"}
-
-                    </td>
-
-
-                    {/* COUNTRY */}
-
-                    <td className="
-                      px-5
-                      py-4
-                      text-sm
-                      text-slate-700
-                      dark:text-slate-300
-                    ">
-
-                      {disaster.country || "—"}
-
-                    </td>
-
-
-                    {/* LOCATION */}
-
-                    <td className="
-                      px-5
-                      py-4
-                      text-sm
-                      text-slate-700
-                      dark:text-slate-300
-                    ">
-
-                      {disaster.location || "—"}
-
-                    </td>
-
-
-                    {/* SEVERITY */}
-
-                    <td className="px-5 py-4">
-
-                      <SeverityBadge
-                        severity={
-                          disaster.severity
-                        }
-                      />
-
-                    </td>
-
-                  </tr>
-
-                ))}
+              )}
 
             </tbody>
 
@@ -1113,7 +2286,6 @@ function SummaryCard({
         items-start
         justify-between
       ">
-
 
         <div>
 
@@ -1256,7 +2428,8 @@ function SeverityBar({
             duration-500
           `}
           style={{
-            width: `${percentage}%`,
+            width:
+              `${percentage}%`,
           }}
         />
 
@@ -1355,6 +2528,144 @@ function ReportMetric({
 
 
 /* =========================================================
+   ANALYTICS CARD
+========================================================= */
+
+function AnalyticsCard({
+  icon,
+  label,
+  value,
+  description,
+}) {
+
+  return (
+
+    <div className="
+      rounded-lg
+      border
+      border-blue-200
+      dark:border-slate-700
+      bg-white/50
+      dark:bg-slate-950/40
+      p-4
+    ">
+
+      <div className="
+        flex
+        items-center
+        gap-3
+      ">
+
+        <div className="
+          w-10
+          h-10
+          rounded-lg
+          bg-blue-100
+          dark:bg-slate-800
+          flex
+          items-center
+          justify-center
+        ">
+
+          {icon}
+
+        </div>
+
+
+        <div className="min-w-0">
+
+          <p className="
+            text-xs
+            text-slate-500
+            dark:text-slate-400
+          ">
+
+            {label}
+
+          </p>
+
+
+          <p className="
+            text-xl
+            font-bold
+            text-slate-900
+            dark:text-white
+            truncate
+          ">
+
+            {value}
+
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <p className="
+        text-xs
+        text-slate-400
+        dark:text-slate-500
+        mt-3
+      ">
+
+        {description}
+
+      </p>
+
+    </div>
+
+  )
+}
+
+
+/* =========================================================
+   ASSESSMENT ROW
+========================================================= */
+
+function AssessmentRow({
+  label,
+  value,
+}) {
+
+  return (
+
+    <div className="
+      flex
+      items-center
+      justify-between
+      gap-3
+    ">
+
+      <span className="
+        text-xs
+        text-slate-500
+        dark:text-slate-400
+      ">
+
+        {label}
+
+      </span>
+
+
+      <span className="
+        text-sm
+        font-bold
+        text-slate-900
+        dark:text-white
+      ">
+
+        {value}
+
+      </span>
+
+    </div>
+
+  )
+}
+
+
+/* =========================================================
    SEVERITY BADGE
 ========================================================= */
 
@@ -1366,7 +2677,9 @@ function SeverityBadge({
     Number(severity)
 
 
-  let label = "Not rated"
+  let label =
+    "Not rated"
+
 
   let style = `
     bg-slate-100
@@ -1378,7 +2691,8 @@ function SeverityBadge({
 
   if (value >= 8) {
 
-    label = "Critical"
+    label =
+      "Critical"
 
     style = `
       bg-red-100
@@ -1389,7 +2703,8 @@ function SeverityBadge({
 
   } else if (value >= 6) {
 
-    label = "High"
+    label =
+      "High"
 
     style = `
       bg-orange-100
@@ -1400,7 +2715,8 @@ function SeverityBadge({
 
   } else if (value >= 4) {
 
-    label = "Medium"
+    label =
+      "Medium"
 
     style = `
       bg-yellow-100
@@ -1411,7 +2727,8 @@ function SeverityBadge({
 
   } else if (value >= 1) {
 
-    label = "Low"
+    label =
+      "Low"
 
     style = `
       bg-green-100
