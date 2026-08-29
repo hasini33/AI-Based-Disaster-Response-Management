@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import {
   Boxes,
@@ -7,229 +7,550 @@ import {
   CheckCircle2,
   Package,
   Truck,
-  Users,
   BrainCircuit,
   ChevronRight,
-  Minus,
-  Plus,
   ShieldAlert,
   Send,
   RotateCcw,
   X,
+  Clock,
+  Check,
+  Ban,
 } from "lucide-react"
+
+import {
+  getOptimizedAllocation,
+  getZoneAllocation,
+  requestAllocation,
+  approveAllocation,
+  rejectAllocation,
+  completeAllocation,
+} from "../services/allocationService"
 
 
 function Allocation() {
 
-  // --------------------------------------------------
-  // SELECTED ZONE
-  // --------------------------------------------------
+  // ==================================================
+  // STATE
+  // ==================================================
 
-  const [selectedZoneId, setSelectedZoneId] = useState("Z-001")
+  const [allocationData, setAllocationData] = useState(null)
+  const [selectedZoneId, setSelectedZoneId] = useState(null)
+  const [zoneAllocation, setZoneAllocation] = useState(null)
+
+  const [loading, setLoading] = useState(true)
+  const [zoneLoading, setZoneLoading] = useState(false)
+
+  const [error, setError] = useState("")
+  const [actionError, setActionError] = useState("")
 
   const [showReview, setShowReview] = useState(false)
+  const [requestLoading, setRequestLoading] = useState(false)
 
-  const [deployed, setDeployed] = useState(false)
+  const [actionLoading, setActionLoading] = useState(null)
 
-
-  // --------------------------------------------------
-  // DISASTER ZONES
-  // --------------------------------------------------
-
-  const zones = [
-    {
-      id: "Z-001",
-      name: "Guwahati",
-      state: "Assam",
-      severity: "Critical",
-      affected: "8,400",
-      population: 8400,
-      status: "Immediate Response",
-    },
-
-    {
-      id: "Z-002",
-      name: "Dibrugarh",
-      state: "Assam",
-      severity: "Critical",
-      affected: "6,200",
-      population: 6200,
-      status: "Evacuation Required",
-    },
-
-    {
-      id: "Z-003",
-      name: "Patna",
-      state: "Bihar",
-      severity: "High",
-      affected: "5,100",
-      population: 5100,
-      status: "Relief Required",
-    },
-
-    {
-      id: "Z-004",
-      name: "Silchar",
-      state: "Assam",
-      severity: "Medium",
-      affected: "3,200",
-      population: 3200,
-      status: "Monitoring",
-    },
-  ]
+  const [requestResult, setRequestResult] = useState(null)
 
 
-  // --------------------------------------------------
-  // RESOURCES
-  // --------------------------------------------------
+  // ==================================================
+  // LOAD OPTIMIZED ALLOCATION
+  // ==================================================
 
-  const [resources, setResources] = useState({
-    water: 1200,
-    food: 900,
-    medical: 180,
-    shelter: 80,
-  })
+  async function loadAllocation() {
 
+    try {
 
-  // --------------------------------------------------
-  // AVAILABLE RESOURCES
-  // --------------------------------------------------
+      setLoading(true)
+      setError("")
 
-  const availableResources = {
-    water: 5000,
-    food: 3500,
-    medical: 700,
-    shelter: 300,
+      const data = await getOptimizedAllocation()
+
+      setAllocationData(data)
+
+      if (
+        data?.allocation?.length &&
+        selectedZoneId === null
+      ) {
+
+        setSelectedZoneId(
+          data.allocation[0].zone_id
+        )
+
+      }
+
+    } catch (err) {
+
+      console.error(err)
+
+      setError(
+        err.message ||
+        "Unable to load allocation data."
+      )
+
+    } finally {
+
+      setLoading(false)
+
+    }
   }
 
 
-  // --------------------------------------------------
-  // AI RECOMMENDATIONS
-  // --------------------------------------------------
+  // ==================================================
+  // LOAD SELECTED ZONE
+  // ==================================================
 
-  const recommendations = {
-    "Z-001": {
-      water: 1200,
-      food: 900,
-      medical: 180,
-      shelter: 80,
-    },
+  async function loadZoneAllocation(zoneId) {
 
-    "Z-002": {
-      water: 950,
-      food: 700,
-      medical: 140,
-      shelter: 100,
-    },
+    try {
 
-    "Z-003": {
-      water: 700,
-      food: 550,
-      medical: 90,
-      shelter: 60,
-    },
+      setZoneLoading(true)
+      setActionError("")
 
-    "Z-004": {
-      water: 400,
-      food: 300,
-      medical: 50,
-      shelter: 30,
-    },
+      const data = await getZoneAllocation(zoneId)
+
+      setZoneAllocation(data)
+
+    } catch (err) {
+
+      console.error(err)
+
+      setActionError(
+        err.message ||
+        "Unable to load zone allocation."
+      )
+
+    } finally {
+
+      setZoneLoading(false)
+
+    }
   }
 
 
-  // --------------------------------------------------
-  // CURRENT ZONE
-  // --------------------------------------------------
+  // ==================================================
+  // INITIAL LOAD
+  // ==================================================
+
+  useEffect(() => {
+
+    loadAllocation()
+
+  }, [])
+
+
+  // ==================================================
+  // LOAD ZONE WHEN SELECTED
+  // ==================================================
+
+  useEffect(() => {
+
+    if (selectedZoneId !== null) {
+
+      loadZoneAllocation(
+        selectedZoneId
+      )
+
+    }
+
+  }, [selectedZoneId])
+
+
+  // ==================================================
+  // ZONES
+  // ==================================================
+
+  const zones =
+    allocationData?.allocation || []
+
+
+  // ==================================================
+  // SELECTED ZONE
+  // ==================================================
 
   const selectedZone = zones.find(
-    (zone) => zone.id === selectedZoneId
+    (zone) =>
+      zone.zone_id === selectedZoneId
   )
 
 
-  // --------------------------------------------------
-  // CHANGE ZONE
-  // --------------------------------------------------
+  // ==================================================
+  // RESOURCES
+  // ==================================================
 
-  function selectZone(zone) {
-
-    setSelectedZoneId(zone.id)
-
-    setResources({
-      ...recommendations[zone.id],
-    })
-
-    setDeployed(false)
-  }
+  const resources =
+    selectedZone?.resources || {}
 
 
-  // --------------------------------------------------
-  // CHANGE RESOURCE QUANTITY
-  // --------------------------------------------------
-
-  function updateResource(resource, amount) {
-
-    setResources((current) => {
-
-      const newValue = current[resource] + amount
-
-      if (newValue < 0) {
-        return current
-      }
-
-      if (newValue > availableResources[resource]) {
-        return current
-      }
-
-      return {
-        ...current,
-        [resource]: newValue,
-      }
-
-    })
-
-    setDeployed(false)
-  }
-
-
-  // --------------------------------------------------
-  // RESET TO AI RECOMMENDATION
-  // --------------------------------------------------
-
-  function resetAllocation() {
-
-    setResources({
-      ...recommendations[selectedZoneId],
-    })
-
-    setDeployed(false)
-  }
-
-
-  // --------------------------------------------------
-  // TOTAL RESOURCE UNITS
-  // --------------------------------------------------
+  // ==================================================
+  // TOTAL ALLOCATION
+  // ==================================================
 
   const totalAllocated = useMemo(() => {
 
     return Object.values(resources).reduce(
-      (total, value) => total + value,
+      (total, resource) =>
+        total + Number(resource.allocated || 0),
       0
     )
 
   }, [resources])
 
 
-  // --------------------------------------------------
-  // DEPLOY
-  // --------------------------------------------------
+  const totalRequired = useMemo(() => {
 
-  function deployResources() {
+    return Object.values(resources).reduce(
+      (total, resource) =>
+        total + Number(resource.required || 0),
+      0
+    )
 
-    setDeployed(true)
-    setShowReview(false)
+  }, [resources])
+
+
+  // ==================================================
+  // RESOURCE HELPERS
+  // ==================================================
+
+  const resourceConfig = {
+
+    water_liters: {
+      label: "Water",
+      unit: "liters",
+      icon: "💧",
+    },
+
+    food_packets: {
+      label: "Food Packets",
+      unit: "packets",
+      icon: "📦",
+    },
+
+    medical_kits: {
+      label: "Medical Kits",
+      unit: "kits",
+      icon: "🩺",
+    },
+
+    shelter_capacity: {
+      label: "Shelter Capacity",
+      unit: "people",
+      icon: "⛺",
+    },
+
   }
 
+
+  // ==================================================
+  // REQUEST ALLOCATION
+  // ==================================================
+
+  async function handleRequestAllocation() {
+
+    if (!selectedZoneId) {
+      return
+    }
+
+    try {
+
+      setRequestLoading(true)
+      setActionError("")
+
+      const result =
+        await requestAllocation(
+          selectedZoneId
+        )
+
+      setRequestResult(result)
+
+      setShowReview(false)
+
+      await loadAllocation()
+
+      await loadZoneAllocation(
+        selectedZoneId
+      )
+
+    } catch (err) {
+
+      console.error(err)
+
+      setActionError(
+        err.message ||
+        "Unable to create allocation request."
+      )
+
+    } finally {
+
+      setRequestLoading(false)
+
+    }
+  }
+
+
+  // ==================================================
+  // APPROVE
+  // ==================================================
+
+  async function handleApprove(allocationId) {
+
+    try {
+
+      setActionLoading(allocationId)
+      setActionError("")
+
+      await approveAllocation(
+        allocationId
+      )
+
+      await loadAllocation()
+
+      await loadZoneAllocation(
+        selectedZoneId
+      )
+
+      if (requestResult) {
+
+        setRequestResult((current) => {
+
+          if (!current?.allocations) {
+            return current
+          }
+
+          return {
+            ...current,
+            allocations:
+              current.allocations.map(
+                (item) =>
+                  item.id === allocationId
+                    ? {
+                        ...item,
+                        status: "Approved",
+                      }
+                    : item
+              ),
+          }
+
+        })
+
+      }
+
+    } catch (err) {
+
+      console.error(err)
+
+      setActionError(
+        err.message ||
+        "Unable to approve allocation."
+      )
+
+    } finally {
+
+      setActionLoading(null)
+
+    }
+  }
+
+
+  // ==================================================
+  // REJECT
+  // ==================================================
+
+  async function handleReject(allocationId) {
+
+    try {
+
+      setActionLoading(allocationId)
+      setActionError("")
+
+      await rejectAllocation(
+        allocationId
+      )
+
+      await loadAllocation()
+
+      await loadZoneAllocation(
+        selectedZoneId
+      )
+
+    } catch (err) {
+
+      console.error(err)
+
+      setActionError(
+        err.message ||
+        "Unable to reject allocation."
+      )
+
+    } finally {
+
+      setActionLoading(null)
+
+    }
+  }
+
+
+  // ==================================================
+  // COMPLETE
+  // ==================================================
+
+  async function handleComplete(allocationId) {
+
+    try {
+
+      setActionLoading(allocationId)
+      setActionError("")
+
+      await completeAllocation(
+        allocationId
+      )
+
+      await loadAllocation()
+
+      await loadZoneAllocation(
+        selectedZoneId
+      )
+
+      if (requestResult) {
+
+        setRequestResult((current) => {
+
+          if (!current?.allocations) {
+            return current
+          }
+
+          return {
+            ...current,
+            allocations:
+              current.allocations.map(
+                (item) =>
+                  item.id === allocationId
+                    ? {
+                        ...item,
+                        status: "Completed",
+                      }
+                    : item
+              ),
+          }
+
+        })
+
+      }
+
+    } catch (err) {
+
+      console.error(err)
+
+      setActionError(
+        err.message ||
+        "Unable to complete allocation."
+      )
+
+    } finally {
+
+      setActionLoading(null)
+
+    }
+  }
+
+
+  // ==================================================
+  // RESET
+  // ==================================================
+
+  async function resetAllocation() {
+
+    setRequestResult(null)
+    setActionError("")
+
+    await loadAllocation()
+
+    if (selectedZoneId !== null) {
+
+      await loadZoneAllocation(
+        selectedZoneId
+      )
+
+    }
+
+  }
+
+
+  // ==================================================
+  // LOADING
+  // ==================================================
+
+  if (loading) {
+
+    return (
+
+      <div className="flex items-center justify-center min-h-[400px]">
+
+        <div className="text-center">
+
+          <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
+
+          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            Loading optimized allocation...
+          </p>
+
+        </div>
+
+      </div>
+
+    )
+
+  }
+
+
+  // ==================================================
+  // ERROR
+  // ==================================================
+
+  if (error) {
+
+    return (
+
+      <div className="p-6">
+
+        <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 p-5">
+
+          <div className="flex items-center gap-3">
+
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+
+            <div>
+
+              <p className="font-semibold text-red-700 dark:text-red-400">
+                Unable to load allocation
+              </p>
+
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                {error}
+              </p>
+
+            </div>
+
+          </div>
+
+          <button
+            onClick={loadAllocation}
+            className="mt-4 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold"
+          >
+            Retry
+          </button>
+
+        </div>
+
+      </div>
+
+    )
+
+  }
+
+
+  // ==================================================
+  // MAIN UI
+  // ==================================================
 
   return (
 
@@ -259,7 +580,7 @@ function Allocation() {
           </h1>
 
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Allocate emergency resources to affected disaster zones.
+            OR-Tools optimized allocation across disaster zones.
           </p>
 
         </div>
@@ -280,6 +601,126 @@ function Allocation() {
         </div>
 
       </div>
+
+
+      {/* ==================================================
+          GLOBAL SUMMARY
+      ================================================== */}
+
+      {allocationData && (
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+          <SummaryCard
+            label="Total Required"
+            value={allocationData.total_required}
+          />
+
+          <SummaryCard
+            label="Total Allocated"
+            value={allocationData.total_allocated}
+          />
+
+          <SummaryCard
+            label="Coverage"
+            value={`${allocationData.overall_coverage_percent}%`}
+          />
+
+          <SummaryCard
+            label="Zones"
+            value={zones.length}
+          />
+
+        </div>
+
+      )}
+
+
+      {/* ==================================================
+          ERROR / ACTION MESSAGE
+      ================================================== */}
+
+      {actionError && (
+
+        <div className="flex items-center gap-3 p-4 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20">
+
+          <AlertTriangle className="w-5 h-5 text-red-600" />
+
+          <p className="text-sm text-red-700 dark:text-red-400">
+            {actionError}
+          </p>
+
+          <button
+            onClick={() => setActionError("")}
+            className="ml-auto"
+          >
+            <X className="w-4 h-4" />
+          </button>
+
+        </div>
+
+      )}
+
+
+      {/* ==================================================
+          REQUEST RESULT
+      ================================================== */}
+
+      {requestResult && (
+
+        <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 rounded-xl p-5">
+
+          <div className="flex items-center justify-between">
+
+            <div>
+
+              <div className="flex items-center gap-2">
+
+                <CheckCircle2 className="w-5 h-5 text-blue-600" />
+
+                <h2 className="font-semibold">
+                  Allocation Request Created
+                </h2>
+
+              </div>
+
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Request status: {requestResult.status}
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <div className="mt-4 space-y-2">
+
+            {requestResult.allocations?.map(
+              (item) => (
+
+                <AllocationRequestRow
+                  key={item.id}
+                  allocation={item}
+                  loading={actionLoading === item.id}
+                  onApprove={() =>
+                    handleApprove(item.id)
+                  }
+                  onReject={() =>
+                    handleReject(item.id)
+                  }
+                  onComplete={() =>
+                    handleComplete(item.id)
+                  }
+                />
+
+              )
+            )}
+
+          </div>
+
+        </div>
+
+      )}
 
 
       {/* ==================================================
@@ -308,7 +749,7 @@ function Allocation() {
                   </h2>
 
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Select a zone to allocate resources
+                    Select a zone
                   </p>
 
                 </div>
@@ -327,12 +768,16 @@ function Allocation() {
               {zones.map((zone) => (
 
                 <button
-                  key={zone.id}
-                  onClick={() => selectZone(zone)}
+                  key={zone.zone_id}
+                  onClick={() => {
+                    setSelectedZoneId(zone.zone_id)
+                    setRequestResult(null)
+                    setActionError("")
+                  }}
                   className={`
                     w-full text-left p-4 rounded-lg border transition
                     ${
-                      selectedZoneId === zone.id
+                      selectedZoneId === zone.zone_id
                         ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
                         : "border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-800"
                     }
@@ -348,20 +793,19 @@ function Allocation() {
                         <MapPin className="w-4 h-4 text-gray-400" />
 
                         <span className="text-sm font-semibold">
-                          {zone.name}
+                          {zone.zone_name}
                         </span>
 
                       </div>
 
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
-                        {zone.state}
+                        Severity {Number(zone.severity).toFixed(2)}
                       </p>
 
                     </div>
 
-
                     <SeverityBadge
-                      severity={zone.severity}
+                      severity={zone.priority}
                     />
 
                   </div>
@@ -372,11 +816,11 @@ function Allocation() {
                     <div>
 
                       <p className="text-[11px] text-gray-400">
-                        Affected population
+                        Priority
                       </p>
 
                       <p className="text-sm font-semibold mt-0.5">
-                        {zone.affected}
+                        {zone.priority}
                       </p>
 
                     </div>
@@ -385,7 +829,7 @@ function Allocation() {
                       className={`
                         w-4 h-4
                         ${
-                          selectedZoneId === zone.id
+                          selectedZoneId === zone.zone_id
                             ? "text-blue-600"
                             : "text-gray-400"
                         }
@@ -414,8 +858,6 @@ function Allocation() {
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
 
 
-            {/* HEADER */}
-
             <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800">
 
               <div className="flex items-center justify-between">
@@ -427,18 +869,31 @@ function Allocation() {
                     <MapPin className="w-4 h-4 text-blue-600" />
 
                     <h2 className="font-semibold">
-                      {selectedZone.name}
+                      {selectedZone?.zone_name || "Select Zone"}
                     </h2>
 
-                    <SeverityBadge
-                      severity={selectedZone.severity}
-                    />
+                    {selectedZone && (
+
+                      <SeverityBadge
+                        severity={selectedZone.priority}
+                      />
+
+                    )}
 
                   </div>
 
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {selectedZone.status}
-                  </p>
+                  {selectedZone && (
+
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+
+                      Severity:{" "}
+                      {Number(
+                        selectedZone.severity
+                      ).toFixed(2)}
+
+                    </p>
+
+                  )}
 
                 </div>
 
@@ -448,7 +903,7 @@ function Allocation() {
                   className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  Reset
+                  Refresh
                 </button>
 
               </div>
@@ -456,75 +911,56 @@ function Allocation() {
             </div>
 
 
-            {/* RESOURCE CONTROLS */}
-
             <div className="p-5 space-y-4">
 
+              {zoneLoading ? (
 
-              <ResourceControl
-                icon={<span>💧</span>}
-                label="Water"
-                unit="liters"
-                value={resources.water}
-                available={availableResources.water}
-                onDecrease={() =>
-                  updateResource("water", -100)
-                }
-                onIncrease={() =>
-                  updateResource("water", 100)
-                }
-              />
+                <div className="py-10 text-center">
 
+                  <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
 
-              <ResourceControl
-                icon={<span>📦</span>}
-                label="Food Packets"
-                unit="packets"
-                value={resources.food}
-                available={availableResources.food}
-                onDecrease={() =>
-                  updateResource("food", -100)
-                }
-                onIncrease={() =>
-                  updateResource("food", 100)
-                }
-              />
+                  <p className="text-xs text-gray-500 mt-3">
+                    Loading zone allocation...
+                  </p>
 
+                </div>
 
-              <ResourceControl
-                icon={<span>🩺</span>}
-                label="Medical Kits"
-                unit="kits"
-                value={resources.medical}
-                available={availableResources.medical}
-                onDecrease={() =>
-                  updateResource("medical", -10)
-                }
-                onIncrease={() =>
-                  updateResource("medical", 10)
-                }
-              />
+              ) : (
 
+                Object.entries(resources).map(
+                  ([resourceType, data]) => {
 
-              <ResourceControl
-                icon={<span>⛺</span>}
-                label="Shelter Capacity"
-                unit="people"
-                value={resources.shelter}
-                available={availableResources.shelter}
-                onDecrease={() =>
-                  updateResource("shelter", -10)
-                }
-                onIncrease={() =>
-                  updateResource("shelter", 10)
-                }
-              />
+                    const config =
+                      resourceConfig[
+                        resourceType
+                      ] || {
+                        label: resourceType,
+                        unit: "",
+                        icon: "📦",
+                      }
 
+                    return (
+
+                      <ResourceControl
+                        key={resourceType}
+                        icon={config.icon}
+                        label={config.label}
+                        unit={config.unit}
+                        required={data.required}
+                        allocated={data.allocated}
+                        available={data.available}
+                        shortage={data.shortage}
+                      />
+
+                    )
+
+                  }
+                )
+
+              )}
 
             </div>
 
-
-            {/* ALLOCATION SUMMARY */}
 
             <div className="mx-5 mb-5 p-4 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800">
 
@@ -533,16 +969,39 @@ function Allocation() {
                 <div>
 
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Total allocated units
+                    Total allocated
                   </p>
 
                   <p className="text-2xl font-bold mt-1">
-                    {totalAllocated.toLocaleString()}
+                    {totalAllocated.toLocaleString(
+                      undefined,
+                      {
+                        maximumFractionDigits: 2,
+                      }
+                    )}
                   </p>
 
                 </div>
 
                 <Package className="w-7 h-7 text-blue-600" />
+
+              </div>
+
+
+              <div className="mt-3 flex items-center justify-between text-xs">
+
+                <span className="text-gray-500 dark:text-gray-400">
+                  Required
+                </span>
+
+                <span className="font-semibold">
+                  {totalRequired.toLocaleString(
+                    undefined,
+                    {
+                      maximumFractionDigits: 2,
+                    }
+                  )}
+                </span>
 
               </div>
 
@@ -562,8 +1021,6 @@ function Allocation() {
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
 
 
-            {/* AI HEADER */}
-
             <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800">
 
               <div className="flex items-center gap-3">
@@ -577,11 +1034,11 @@ function Allocation() {
                 <div>
 
                   <h2 className="font-semibold">
-                    AI Recommendation
+                    AI / OR-Tools Recommendation
                   </h2>
 
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Suggested allocation for this zone
+                    Optimized using current demand and inventory
                   </p>
 
                 </div>
@@ -591,76 +1048,91 @@ function Allocation() {
             </div>
 
 
-            {/* AI BODY */}
-
             <div className="p-5">
 
-              <div className="rounded-lg border border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 p-4">
+              {selectedZone && (
 
-                <div className="flex items-start gap-3">
+                <>
 
-                  <ShieldAlert className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5" />
+                  <div className="rounded-lg border border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 p-4">
 
-                  <div>
+                    <div className="flex items-start gap-3">
 
-                    <p className="text-sm font-semibold">
-                      Priority: {selectedZone.severity}
-                    </p>
+                      <ShieldAlert className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5" />
 
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-                      Based on affected population, disaster
-                      severity and current zone priority.
-                    </p>
+                      <div>
+
+                        <p className="text-sm font-semibold">
+                          Priority: {selectedZone.priority}
+                        </p>
+
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+
+                          Severity score:{" "}
+                          {Number(
+                            selectedZone.severity
+                          ).toFixed(2)}
+
+                          <br />
+
+                          Priority weight:{" "}
+                          {selectedZone.priority_weight}
+
+                        </p>
+
+                      </div>
+
+                    </div>
 
                   </div>
 
-                </div>
 
-              </div>
+                  <div className="mt-5 space-y-3">
 
+                    {Object.entries(resources).map(
+                      ([resourceType, data]) => {
 
-              <div className="mt-5 space-y-3">
+                        const config =
+                          resourceConfig[
+                            resourceType
+                          ] || {
+                            label: resourceType,
+                            unit: "",
+                          }
 
+                        return (
 
-                <RecommendationRow
-                  label="Water"
-                  value={recommendations[selectedZoneId].water}
-                  unit="L"
-                />
+                          <RecommendationRow
+                            key={resourceType}
+                            label={config.label}
+                            value={data.allocated}
+                            required={data.required}
+                            unit={config.unit}
+                          />
 
-                <RecommendationRow
-                  label="Food"
-                  value={recommendations[selectedZoneId].food}
-                  unit="packets"
-                />
+                        )
 
-                <RecommendationRow
-                  label="Medical"
-                  value={recommendations[selectedZoneId].medical}
-                  unit="kits"
-                />
+                      }
+                    )}
 
-                <RecommendationRow
-                  label="Shelter"
-                  value={recommendations[selectedZoneId].shelter}
-                  unit="capacity"
-                />
-
-
-              </div>
+                  </div>
 
 
-              <div className="mt-5 pt-4 border-t border-gray-200 dark:border-gray-800">
+                  <div className="mt-5 pt-4 border-t border-gray-200 dark:border-gray-800">
 
-                <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                    <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
 
-                  <CheckCircle2 className="w-4 h-4" />
+                      <CheckCircle2 className="w-4 h-4" />
 
-                  AI recommendation available
+                      Optimization result available
 
-                </div>
+                    </div>
 
-              </div>
+                  </div>
+
+                </>
+
+              )}
 
             </div>
 
@@ -682,15 +1154,15 @@ function Allocation() {
               <div>
 
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Nearest Resource Depot
+                  Resource Availability
                 </p>
 
                 <p className="text-sm font-semibold mt-1">
-                  Central Relief Depot
+                  Current Inventory
                 </p>
 
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Dispatch available
+                  Based on available backend resources
                 </p>
 
               </div>
@@ -712,37 +1184,26 @@ function Allocation() {
 
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 
-
           <div className="flex items-center gap-4">
 
             <div className="w-11 h-11 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center">
 
-              {deployed ? (
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
-              ) : (
-                <Send className="w-5 h-5 text-blue-600" />
-              )}
+              <Send className="w-5 h-5 text-blue-600" />
 
             </div>
-
 
             <div>
 
               <p className="font-semibold">
 
-                {deployed
-                  ? "Resources deployed successfully"
-                  : `Ready to allocate resources to ${selectedZone.name}`
-                }
+                Ready to request optimized allocation
 
               </p>
 
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
 
-                {deployed
-                  ? "Deployment has been recorded for this response zone."
-                  : `${totalAllocated.toLocaleString()} total resource units selected`
-                }
+                This will create Pending allocation requests
+                in the backend.
 
               </p>
 
@@ -753,31 +1214,25 @@ function Allocation() {
 
           <div className="flex items-center gap-3">
 
-            {!deployed && (
-
-              <button
-                onClick={() => setShowReview(true)}
-                className="px-5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition"
-              >
-                Review Allocation
-              </button>
-
-            )}
+            <button
+              onClick={resetAllocation}
+              className="px-5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+            >
+              Refresh
+            </button>
 
 
-            {deployed && (
+            <button
+              onClick={() => setShowReview(true)}
+              disabled={!selectedZone}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold"
+            >
 
-              <button
-                onClick={() => {
-                  setDeployed(false)
-                  resetAllocation()
-                }}
-                className="px-5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition"
-              >
-                New Allocation
-              </button>
+              <Send className="w-4 h-4" />
 
-            )}
+              Request Allocation
+
+            </button>
 
           </div>
 
@@ -790,14 +1245,12 @@ function Allocation() {
           REVIEW MODAL
       ================================================== */}
 
-      {showReview && (
+      {showReview && selectedZone && (
 
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
 
           <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-2xl overflow-hidden">
 
-
-            {/* MODAL HEADER */}
 
             <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
 
@@ -808,8 +1261,12 @@ function Allocation() {
                 </p>
 
                 <h2 className="text-lg font-bold mt-1">
-                  {selectedZone.name}
+                  {selectedZone.zone_name}
                 </h2>
+
+                <p className="text-xs text-gray-500 mt-1">
+                  Priority: {selectedZone.priority}
+                </p>
 
               </div>
 
@@ -824,30 +1281,34 @@ function Allocation() {
             </div>
 
 
-            {/* MODAL BODY */}
+            <div className="p-5 space-y-3">
 
-            <div className="p-5 space-y-4">
+              {Object.entries(resources).map(
+                ([resourceType, data]) => {
 
+                  const config =
+                    resourceConfig[
+                      resourceType
+                    ] || {
+                      label: resourceType,
+                      unit: "",
+                    }
 
-              <ReviewRow
-                label="Water"
-                value={`${resources.water.toLocaleString()} L`}
-              />
+                  return (
 
-              <ReviewRow
-                label="Food Packets"
-                value={`${resources.food.toLocaleString()}`}
-              />
+                    <ReviewRow
+                      key={resourceType}
+                      label={config.label}
+                      value={`${Number(
+                        data.allocated || 0
+                      ).toLocaleString()} ${config.unit}`}
+                      shortage={data.shortage}
+                    />
 
-              <ReviewRow
-                label="Medical Kits"
-                value={`${resources.medical.toLocaleString()}`}
-              />
+                  )
 
-              <ReviewRow
-                label="Shelter Capacity"
-                value={`${resources.shelter.toLocaleString()}`}
-              />
+                }
+              )}
 
 
               <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900/50">
@@ -857,8 +1318,11 @@ function Allocation() {
                   <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
 
                   <p className="text-xs text-yellow-700 dark:text-yellow-400">
-                    Please verify the allocation before
-                    deploying resources to the field.
+
+                    This creates a Pending allocation request.
+                    Inventory is not deducted until the allocation
+                    is approved.
+
                   </p>
 
                 </div>
@@ -867,8 +1331,6 @@ function Allocation() {
 
             </div>
 
-
-            {/* MODAL FOOTER */}
 
             <div className="px-5 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
 
@@ -879,14 +1341,28 @@ function Allocation() {
                 Cancel
               </button>
 
+
               <button
-                onClick={deployResources}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
+                onClick={handleRequestAllocation}
+                disabled={requestLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold"
               >
 
-                <Send className="w-4 h-4" />
+                {requestLoading ? (
 
-                Deploy Resources
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    Creating...
+                  </>
+
+                ) : (
+
+                  <>
+                    <Send className="w-4 h-4" />
+                    Create Request
+                  </>
+
+                )}
 
               </button>
 
@@ -899,35 +1375,75 @@ function Allocation() {
       )}
 
     </div>
+
   )
 }
 
 
-/* ======================================================
-   RESOURCE CONTROL
-====================================================== */
+// ======================================================
+// SUMMARY CARD
+// ======================================================
+
+function SummaryCard({
+  label,
+  value,
+}) {
+
+  return (
+
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        {label}
+      </p>
+
+      <p className="text-xl font-bold mt-1">
+        {typeof value === "number"
+          ? value.toLocaleString(
+              undefined,
+              {
+                maximumFractionDigits: 2,
+              }
+            )
+          : value}
+      </p>
+
+    </div>
+
+  )
+}
+
+
+// ======================================================
+// RESOURCE CONTROL
+// ======================================================
 
 function ResourceControl({
   icon,
   label,
   unit,
-  value,
+  required,
+  allocated,
   available,
-  onDecrease,
-  onIncrease,
+  shortage,
 }) {
 
-  const percentage = Math.min(
-    Math.round((value / available) * 100),
-    100
-  )
+  const percentage =
+    required > 0
+      ? Math.min(
+          Math.round(
+            (allocated / required) * 100
+          ),
+          100
+        )
+      : 0
 
 
   return (
 
     <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-4">
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
 
         <div className="flex items-center gap-3">
 
@@ -942,7 +1458,11 @@ function ResourceControl({
             </p>
 
             <p className="text-xs text-gray-400">
-              Available: {available.toLocaleString()} {unit}
+              Available:{" "}
+              {Number(
+                available || 0
+              ).toLocaleString()}{" "}
+              {unit}
             </p>
 
           </div>
@@ -950,35 +1470,17 @@ function ResourceControl({
         </div>
 
 
-        <div className="flex items-center gap-2">
+        <div className="text-right">
 
-          <button
-            onClick={onDecrease}
-            className="w-8 h-8 rounded-md border border-gray-200 dark:border-gray-700 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
-            <Minus className="w-4 h-4" />
-          </button>
+          <p className="font-bold">
+            {Number(
+              allocated || 0
+            ).toLocaleString()}
+          </p>
 
-
-          <div className="w-24 text-center">
-
-            <p className="font-bold">
-              {value.toLocaleString()}
-            </p>
-
-            <p className="text-[10px] text-gray-400">
-              {unit}
-            </p>
-
-          </div>
-
-
-          <button
-            onClick={onIncrease}
-            className="w-8 h-8 rounded-md border border-gray-200 dark:border-gray-700 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
+          <p className="text-[10px] text-gray-400">
+            allocated
+          </p>
 
         </div>
 
@@ -989,9 +1491,13 @@ function ResourceControl({
 
         <div className="flex justify-between text-[10px] text-gray-400 mb-1">
 
-          <span>Allocation</span>
+          <span>
+            Coverage
+          </span>
 
-          <span>{percentage}%</span>
+          <span>
+            {percentage}%
+          </span>
 
         </div>
 
@@ -1008,19 +1514,56 @@ function ResourceControl({
 
       </div>
 
+
+      <div className="mt-3 flex items-center justify-between text-xs">
+
+        <span className="text-gray-500 dark:text-gray-400">
+          Required
+        </span>
+
+        <span className="font-medium">
+          {Number(
+            required || 0
+          ).toLocaleString()}{" "}
+          {unit}
+        </span>
+
+      </div>
+
+
+      {Number(shortage || 0) > 0 && (
+
+        <div className="mt-2 flex items-center justify-between text-xs">
+
+          <span className="text-red-500">
+            Shortage
+          </span>
+
+          <span className="font-semibold text-red-600 dark:text-red-400">
+            {Number(
+              shortage
+            ).toLocaleString()}{" "}
+            {unit}
+          </span>
+
+        </div>
+
+      )}
+
     </div>
 
   )
 }
 
 
-/* ======================================================
-   RECOMMENDATION ROW
-====================================================== */
+// ======================================================
+// RECOMMENDATION ROW
+// ======================================================
 
 function RecommendationRow({
   label,
   value,
+  required,
   unit,
 }) {
 
@@ -1032,9 +1575,22 @@ function RecommendationRow({
         {label}
       </span>
 
-      <span className="text-sm font-bold">
-        {value.toLocaleString()} {unit}
-      </span>
+      <div className="text-right">
+
+        <span className="text-sm font-bold">
+          {Number(
+            value || 0
+          ).toLocaleString()}{" "}
+          {unit}
+        </span>
+
+        <p className="text-[10px] text-gray-400">
+          of {Number(
+            required || 0
+          ).toLocaleString()} required
+        </p>
+
+      </div>
 
     </div>
 
@@ -1042,26 +1598,42 @@ function RecommendationRow({
 }
 
 
-/* ======================================================
-   REVIEW ROW
-====================================================== */
+// ======================================================
+// REVIEW ROW
+// ======================================================
 
 function ReviewRow({
   label,
   value,
+  shortage,
 }) {
 
   return (
 
-    <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
 
-      <span className="text-sm text-gray-600 dark:text-gray-300">
-        {label}
-      </span>
+      <div className="flex items-center justify-between">
 
-      <span className="text-sm font-bold">
-        {value}
-      </span>
+        <span className="text-sm text-gray-600 dark:text-gray-300">
+          {label}
+        </span>
+
+        <span className="text-sm font-bold">
+          {value}
+        </span>
+
+      </div>
+
+      {Number(shortage || 0) > 0 && (
+
+        <p className="text-xs text-red-500 mt-1">
+          Shortage:{" "}
+          {Number(
+            shortage
+          ).toLocaleString()}
+        </p>
+
+      )}
 
     </div>
 
@@ -1069,9 +1641,191 @@ function ReviewRow({
 }
 
 
-/* ======================================================
-   SEVERITY BADGE
-====================================================== */
+// ======================================================
+// ALLOCATION REQUEST ROW
+// ======================================================
+
+function AllocationRequestRow({
+  allocation,
+  loading,
+  onApprove,
+  onReject,
+  onComplete,
+}) {
+
+  const status = allocation.status
+
+
+  return (
+
+    <div className="bg-white dark:bg-gray-900 border border-blue-100 dark:border-gray-800 rounded-lg p-4">
+
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
+
+        <div>
+
+          <div className="flex items-center gap-2">
+
+            <span className="text-sm font-semibold">
+              {formatResourceType(
+                allocation.resource_type
+              )}
+            </span>
+
+            <StatusBadge
+              status={status}
+            />
+
+          </div>
+
+
+          <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
+
+            <span>
+              Required:{" "}
+              {Number(
+                allocation.required || 0
+              ).toLocaleString()}
+            </span>
+
+            <span>
+              Allocated:{" "}
+              {Number(
+                allocation.allocated || 0
+              ).toLocaleString()}
+            </span>
+
+            <span>
+              Shortage:{" "}
+              {Number(
+                allocation.shortage || 0
+              ).toLocaleString()}
+            </span>
+
+          </div>
+
+        </div>
+
+
+        <div className="flex items-center gap-2">
+
+
+          {status === "Pending" && (
+
+            <>
+
+              <button
+                onClick={onReject}
+                disabled={loading}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+              >
+
+                <Ban className="w-3.5 h-3.5" />
+
+                Reject
+
+              </button>
+
+
+              <button
+                onClick={onApprove}
+                disabled={loading}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-50"
+              >
+
+                <Check className="w-3.5 h-3.5" />
+
+                Approve
+
+              </button>
+
+            </>
+
+          )}
+
+
+          {status === "Approved" && (
+
+            <button
+              onClick={onComplete}
+              disabled={loading}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold disabled:opacity-50"
+            >
+
+              <CheckCircle2 className="w-3.5 h-3.5" />
+
+              Complete
+
+            </button>
+
+          )}
+
+
+          {loading && (
+
+            <div className="w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+
+          )}
+
+        </div>
+
+      </div>
+
+    </div>
+
+  )
+}
+
+
+// ======================================================
+// STATUS BADGE
+// ======================================================
+
+function StatusBadge({
+  status,
+}) {
+
+  let style =
+    "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+
+  if (status === "Pending") {
+
+    style =
+      "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400"
+
+  } else if (status === "Approved") {
+
+    style =
+      "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400"
+
+  } else if (status === "Completed") {
+
+    style =
+      "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+
+  } else if (status === "Rejected") {
+
+    style =
+      "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400"
+
+  }
+
+  return (
+
+    <span
+      className={`px-2 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap ${style}`}
+    >
+      {status}
+    </span>
+
+  )
+}
+
+
+// ======================================================
+// SEVERITY BADGE
+// ======================================================
 
 function SeverityBadge({
   severity,
@@ -1095,6 +1849,11 @@ function SeverityBadge({
     style =
       "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400"
 
+  } else if (severity === "Low") {
+
+    style =
+      "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+
   }
 
   return (
@@ -1106,6 +1865,34 @@ function SeverityBadge({
     </span>
 
   )
+}
+
+
+// ======================================================
+// RESOURCE NAME
+// ======================================================
+
+function formatResourceType(
+  resourceType
+) {
+
+  const names = {
+
+    food_packets: "Food Packets",
+
+    water_liters: "Water",
+
+    medical_kits: "Medical Kits",
+
+    shelter_capacity: "Shelter Capacity",
+
+  }
+
+  return (
+    names[resourceType] ||
+    resourceType
+  )
+
 }
 
 
