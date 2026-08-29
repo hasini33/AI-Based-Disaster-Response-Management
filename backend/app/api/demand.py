@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from app.services.scenario_service import simulate_scenario
 from app.db.database import get_db
 from app.models.zone import Zone
@@ -24,7 +25,6 @@ def zone_demand(
     zone_id: int,
     db: Session = Depends(get_db)
 ):
-
     result = predict_zone_demand(
         db,
         zone_id
@@ -45,9 +45,7 @@ def update_demand(
     damage_percent: float,
     db: Session = Depends(get_db)
 ):
-
     try:
-
         result = update_dynamic_demand(
             db,
             zone_id,
@@ -63,7 +61,6 @@ def update_demand(
         return result
 
     except ValueError as e:
-
         raise HTTPException(
             status_code=400,
             detail=str(e)
@@ -81,7 +78,6 @@ def update_all_demands(
             detail="damage_percent must be between 0 and 100"
         )
 
-   
     zones = db.query(Zone).all()
 
     if not zones:
@@ -93,7 +89,6 @@ def update_all_demands(
     results = []
 
     for zone in zones:
-
         result = update_dynamic_demand(
             db,
             zone.id,
@@ -109,6 +104,8 @@ def update_all_demands(
         "updated": len(results),
         "zones": results
     }
+
+
 @router.post("/{zone_id}/simulate")
 def scenario_demand(
     zone_id: int,
@@ -117,9 +114,7 @@ def scenario_demand(
     resource_availability: float = 100,
     db: Session = Depends(get_db)
 ):
-
     try:
-
         result = simulate_scenario(
             db,
             zone_id,
@@ -137,7 +132,6 @@ def scenario_demand(
         return result
 
     except ValueError as e:
-
         raise HTTPException(
             status_code=400,
             detail=str(e)

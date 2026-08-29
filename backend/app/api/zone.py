@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from app.models.zone import Zone
 
 from app.db.database import get_db
 from app.schemas.zone import ZoneCreate, ZoneUpdate
@@ -16,6 +17,44 @@ router = APIRouter(
     prefix="/zones",
     tags=["Zones"]
 )
+
+@router.put("/{zone_id}/priority")
+def override_zone_priority(
+    zone_id: int,
+    priority: float,
+    db: Session = Depends(get_db)
+):
+
+    zone = (
+        db.query(Zone)
+        .filter(Zone.id == zone_id)
+        .first()
+    )
+
+    if not zone:
+        raise HTTPException(
+            status_code=404,
+            detail="Zone not found"
+        )
+
+    if priority < 1 or priority > 5:
+        raise HTTPException(
+            status_code=400,
+            detail="Priority must be between 1 and 5"
+        )
+
+    zone.priority_override = priority
+
+    db.commit()
+    db.refresh(zone)
+
+    return {
+        "message": "Priority override updated",
+        "zone_id": zone.id,
+        "zone_name": zone.zone_name,
+        "severity_score": zone.severity_score,
+        "priority_override": zone.priority_override
+    }
 
 
 @router.post("/")
