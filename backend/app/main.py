@@ -29,7 +29,12 @@ from app.models import Base
 from app.api.disaster import router as get_india_disasters
 
 from app.api import routing
-
+from app.api import vehicle
+from app.api.route_optimization import (
+    router as route_optimization_router
+)
+from app.api import mission
+from app.api import auth
 
 Base.metadata.create_all(bind=engine)
 
@@ -45,6 +50,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth.router)
+
+app.include_router(
+    mission.router
+)
+
+
+app.include_router(
+    route_optimization_router
+)
+app.include_router(vehicle.router)
 
 app.include_router(
     routing.router
