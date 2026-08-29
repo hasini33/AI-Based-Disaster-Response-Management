@@ -1,8 +1,12 @@
 import { useState } from "react"
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom"
+import "./App.css"
 
 import Navbar from "./components/Navbar/Navbar"
 import Sidebar from "./components/Sidebar/Sidebar"
+
+import Login from "./pages/Login"
+import Settings from "./pages/Settings"
 
 import Dashboard from "./components/Dashboard/Dashboard"
 import Disasters from "./pages/Disaster"
@@ -12,130 +16,128 @@ import ResponseCoordination from "./pages/ResponseCoordination."
 import AIDemand from "./pages/AIDemand"
 import Reports from "./pages/Reports"
 
+function OperationsShell() {
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => window.innerWidth >= 768
+  )
 
-function App() {
+  const location = useLocation()
 
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // Login page should not show Navbar/Sidebar
+  if (location.pathname === "/login") {
+    return <Login />
+  }
 
   return (
+    <div className="app-shell">
+      <div className="app-noise" aria-hidden="true" />
+
+      <Navbar
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
+
+      <Sidebar
+        sidebarOpen={sidebarOpen}
+        onNavigate={() => {
+          if (window.innerWidth < 768) {
+            setSidebarOpen(false)
+          }
+        }}
+      />
+
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="mobile-scrim md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <main className={`app-main ${sidebarOpen ? "app-main--wide" : ""}`}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <div className="app-main__inner">
+                <Dashboard />
+              </div>
+            }
+          />
+
+          <Route
+            path="/disasters"
+            element={
+              <div className="app-main__inner page-enter">
+                <Disasters />
+              </div>
+            }
+          />
+
+          <Route
+            path="/zones"
+            element={
+              <div className="app-main__inner page-enter">
+                <Zones />
+              </div>
+            }
+          />
+
+          <Route
+            path="/resources"
+            element={
+              <div className="app-main__inner page-enter">
+                <Resources />
+              </div>
+            }
+          />
+
+          <Route
+            path="/AIdemand"
+            element={
+              <div className="app-main__inner page-enter">
+                <AIDemand />
+              </div>
+            }
+          />
+
+          <Route
+            path="/reports"
+            element={
+              <div className="app-main__inner page-enter">
+                <Reports />
+              </div>
+            }
+          />
+
+          <Route
+            path="/response"
+            element={
+              <div className="app-main__inner page-enter">
+                <ResponseCoordination />
+              </div>
+            }
+          />
+
+          <Route
+            path="/settings"
+            element={
+              <div className="app-main__inner page-enter">
+                <Settings />
+              </div>
+            }
+          />
+        </Routes>
+      </main>
+    </div>
+  )
+}
+
+function App() {
+  return (
     <BrowserRouter>
-
-<div className="
-        min-h-screen
-        bg-sky-100
-        dark:bg-slate-950
-        text-slate-900
-        dark:text-slate-100
-        transition-colors
-        duration-200
-      ">        {/* ================= NAVBAR ================= */}
-
-        <Navbar
-          sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
-        />
-
-
-        {/* ================= SIDEBAR ================= */}
-
-        <Sidebar
-          sidebarOpen={sidebarOpen}
-        />
-
-
-        {/* ================= MAIN CONTENT ================= */}
-
-        <main
-          className={`
-            min-h-screen
-            pt-16
-            transition-all
-            duration-300
-            ${sidebarOpen ? "ml-64" : "ml-0"}
-          `}
-        >
-
-          <Routes>
-
-            {/* ================= NORMAL PAGES ================= */}
-
-            <Route
-              path="/"
-              element={
-                <div className="p-6">
-                  <Dashboard />
-                </div>
-              }
-            />
-
-            <Route
-              path="/disasters"
-              element={
-                <div className="p-6">
-                  <Disasters />
-                </div>
-              }
-            />
-
-            <Route
-              path="/zones"
-              element={
-                <div className="p-6">
-                  <Zones />
-                </div>
-              }
-            />
-
-            <Route
-              path="/resources"
-              element={
-                <div className="p-6">
-                  <Resources />
-                </div>
-              }
-            />
-
-          
-
-
-            {/* ================= AI DEMAND ================= */}
-
-            <Route
-              path="/AIdemand"
-              element={
-                <div className="w-full">
-                  <AIDemand />
-                </div>
-              }
-            />
-
-
-            {/* ================= REPORTS ================= */}
-
-            <Route
-              path="/reports"
-              element={
-                <div className="p-6">
-                  <Reports />
-                </div>
-              }
-            />
-
-
-            {/* ================= ALLOCATION ================= */}
-               <Route
-    path="/response"
-    element={<ResponseCoordination />}
-  />
-
-            
-
-          </Routes>
-
-        </main>
-
-      </div>
-
+      <OperationsShell />
     </BrowserRouter>
   )
 }

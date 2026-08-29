@@ -1,7 +1,53 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
-/* Tell Tailwind that dark mode is controlled by .dark */
 @custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: 39 52% 92%;
+  --foreground: 278 24% 20%;
+  --surface: 42 72% 97%;
+  --surface-muted: 39 42% 86%;
+  --surface-raised: 43 76% 99%;
+  --line: 35 31% 78%;
+  --line-strong: 31 30% 65%;
+  --ink-soft: 278 14% 40%;
+  --ink-faint: 278 11% 55%;
+  --navy: 278 34% 25%;
+  --navy-deep: 278 38% 15%;
+  --teal: 164 48% 33%;
+  --teal-soft: 163 38% 84%;
+  --amber: 35 82% 46%;
+  --amber-soft: 37 85% 83%;
+  --coral: 9 63% 51%;
+  --coral-soft: 10 66% 87%;
+  --violet: 289 31% 49%;
+  --shadow: 278 28% 23%;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+.dark {
+  --background: 278 28% 13%;
+  --foreground: 39 63% 90%;
+  --surface: 278 24% 18%;
+  --surface-muted: 278 20% 23%;
+  --surface-raised: 278 22% 21%;
+  --line: 278 15% 31%;
+  --line-strong: 278 14% 42%;
+  --ink-soft: 39 18% 70%;
+  --ink-faint: 39 14% 54%;
+  --navy: 164 38% 54%;
+  --navy-deep: 278 35% 9%;
+  --teal: 164 49% 54%;
+  --teal-soft: 164 26% 23%;
+  --amber: 38 86% 61%;
+  --amber-soft: 36 31% 24%;
+  --coral: 9 66% 62%;
+  --coral-soft: 9 30% 25%;
+  --violet: 289 42% 70%;
+  --shadow: 278 35% 6%;
+}
 
 html,
 body,
@@ -9,16 +55,173 @@ body,
   min-height: 100%;
 }
 
+html {
+  background: hsl(var(--background));
+}
+
 body {
   margin: 0;
-  background-color: #f1f5f9;
-  color: #0f172a;
-  transition:
-    background-color 200ms ease,
-    color 200ms ease;
+  background:
+    radial-gradient(circle at 88% 0%, hsl(var(--amber) / 0.08), transparent 28rem),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  transition: background-color 240ms ease, color 240ms ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+select:focus-visible {
+  outline: 2px solid hsl(var(--amber));
+  outline-offset: 3px;
+}
+
+::selection {
+  background: hsl(var(--amber) / 0.3);
+  color: hsl(var(--foreground));
 }
 
 .dark body {
-  background-color: #020617;
-  color: #f8fafc;
+  background:
+    radial-gradient(circle at 80% -10%, hsl(var(--teal) / 0.13), transparent 32rem),
+    hsl(var(--background));
+}
+
+.app-noise {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.page-enter {
+  animation: page-enter 420ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Shared palette bridge for the legacy page surfaces. This keeps every route
+   on the same sand / aubergine / jade / saffron / coral system. */
+.bg-white, .bg-gray-50, .bg-slate-50, .bg-blue-50, .bg-indigo-50,
+.bg-purple-50, .bg-emerald-50, .bg-red-50, .bg-amber-50 {
+  background-color: hsl(var(--surface)) !important;
+}
+.bg-gray-100, .bg-gray-200, .bg-slate-100, .bg-slate-200, .bg-blue-100,
+.bg-indigo-100, .bg-purple-100, .bg-emerald-100, .bg-red-100, .bg-amber-100 {
+  background-color: hsl(var(--surface-muted)) !important;
+}
+[class*="bg-blue-100/"], [class*="bg-blue-50/"],
+[class*="bg-purple-100/"], [class*="bg-purple-50/"] {
+  background-color: hsl(var(--teal-soft)) !important;
+}
+.bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-indigo-600, .bg-indigo-700 {
+  background-color: hsl(var(--teal)) !important;
+}
+.bg-green-50, .bg-green-100, .bg-green-500, .bg-green-600,
+.bg-emerald-50, .bg-emerald-100, .bg-emerald-500, .bg-emerald-600 {
+  background-color: hsl(var(--teal-soft)) !important;
+}
+.bg-orange-50, .bg-orange-100, .bg-orange-500, .bg-orange-600,
+.bg-yellow-50, .bg-yellow-100, .bg-yellow-500, .bg-yellow-600 {
+  background-color: hsl(var(--amber-soft)) !important;
+}
+.bg-red-50, .bg-red-100, .bg-red-500, .bg-red-600,
+.bg-purple-50, .bg-purple-100, .bg-purple-500, .bg-purple-600 {
+  background-color: hsl(var(--coral-soft)) !important;
+}
+.bg-black\/40, .bg-black\/60, .bg-slate-950\/50 {
+  background-color: hsl(var(--navy-deep) / .58) !important;
+}
+.text-black, .text-gray-900, .text-gray-800, .text-gray-700, .text-gray-600,
+.text-gray-500, .text-slate-900, .text-slate-800, .text-slate-700,
+.text-slate-600, .text-slate-500 {
+  color: hsl(var(--foreground)) !important;
+}
+.text-white { color: hsl(var(--surface)) !important; }
+.text-gray-400, .text-gray-300, .text-slate-400, .text-slate-300 {
+  color: hsl(var(--ink-soft)) !important;
+}
+.text-blue-900, .text-blue-800, .text-blue-700, .text-blue-600,
+.text-blue-500, .text-indigo-700, .text-indigo-600, .text-purple-700,
+.text-purple-600 { color: hsl(var(--teal)) !important; }
+.text-green-500, .text-green-600, .text-green-700, .text-emerald-500,
+.text-emerald-600, .text-orange-500, .text-orange-600, .text-yellow-500,
+.text-yellow-600 { color: hsl(var(--amber)) !important; }
+.text-red-500, .text-red-600, .text-red-700, .text-purple-500 {
+  color: hsl(var(--coral)) !important;
+}
+.border-gray-200, .border-gray-300, .border-gray-400, .border-slate-200,
+.border-slate-300, .border-blue-100, .border-blue-200, .border-blue-300,
+.border-blue-400, .border-indigo-200, .border-indigo-300 {
+  border-color: hsl(var(--line)) !important;
+}
+.border-blue-500, .border-blue-600, .border-blue-700 {
+  border-color: hsl(var(--teal)) !important;
+}
+.dark .dark\:bg-white, .dark .dark\:bg-gray-800, .dark .dark\:bg-gray-900,
+.dark .dark\:bg-slate-700, .dark .dark\:bg-slate-800,
+.dark .dark\:bg-slate-900, .dark .dark\:bg-slate-950,
+.dark .dark\:bg-blue-900, .dark .dark\:bg-blue-950,
+.dark .dark\:bg-indigo-900, .dark .dark\:bg-indigo-950 {
+  background-color: hsl(var(--surface)) !important;
+}
+.dark .dark\:bg-blue-900\/20, .dark .dark\:bg-blue-950\/20,
+.dark .dark\:bg-blue-950\/40, .dark .dark\:bg-purple-900\/20,
+.dark .dark\:bg-purple-950\/20, .dark .dark\:bg-purple-950\/40 {
+  background-color: hsl(var(--teal-soft)) !important;
+}
+.dark .dark\:text-white, .dark .dark\:text-gray-100,
+.dark .dark\:text-gray-200, .dark .dark\:text-gray-300,
+.dark .dark\:text-slate-100, .dark .dark\:text-slate-200,
+.dark .dark\:text-slate-300 {
+  color: hsl(var(--foreground)) !important;
+}
+.dark .dark\:border-gray-700, .dark .dark\:border-slate-700,
+.dark .dark\:border-slate-800, .dark .dark\:border-blue-800,
+.dark .dark\:border-blue-900, .dark .dark\:border-indigo-800,
+.dark .dark\:border-indigo-900 {
+  border-color: hsl(var(--line)) !important;
+}
+.dark [class*="dark:bg-"] {
+  background-color: hsl(var(--surface-muted)) !important;
+}
+.dark [class*="dark:text-"] {
+  color: hsl(var(--foreground)) !important;
+}
+.dark [class*="dark:border-"] {
+  border-color: hsl(var(--line)) !important;
+}
+
+/* The demand planner arrived with a previous blue token set in arbitrary
+   Tailwind values. Resolve those tokens to the shared palette as well. */
+[class*="bg-[#F2F8FF]"] { background-color: hsl(var(--surface)) !important; }
+[class*="bg-[#E8F3FF]"], [class*="bg-[#E3F0FF]"],
+[class*="bg-[#DCEEFF]"] { background-color: hsl(var(--teal-soft)) !important; }
+[class*="border-[#C9E0F5]"], [class*="border-[#D6E7F6]"] {
+  border-color: hsl(var(--line)) !important;
 }
