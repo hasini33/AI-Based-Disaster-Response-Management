@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react"
-
 import {
   Search,
   Filter,
@@ -16,6 +15,8 @@ import {
   CheckCircle2,
   Clock3,
   ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 
 import { useNavigate } from "react-router-dom"
@@ -30,7 +31,6 @@ function Disasters() {
 
   // =====================================================
   // STATE
-  // =====================================================
 
   const [disasters, setDisasters] = useState([])
   const [selectedDisaster, setSelectedDisaster] = useState(null)
@@ -44,12 +44,15 @@ function Disasters() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+
+  // Number of incidents displayed at one time
+  const ITEMS_PER_PAGE = 8
+
   const navigate = useNavigate()
-
-
   // =====================================================
   // LOAD DISASTER IMPACT
-  // =====================================================
 
   async function handleViewImpact() {
 
@@ -75,11 +78,8 @@ function Disasters() {
 
     }
   }
-
-
   // =====================================================
   // GET DISASTERS
-  // =====================================================
 
   useEffect(() => {
 
@@ -87,9 +87,65 @@ function Disasters() {
 
       .then((data) => {
 
-        console.log("Disasters:", data)
+        console.log("Disasters received from backend:", data)
 
-        setDisasters(data)
+        const disasterList = Array.isArray(data)
+          ? data
+          : []
+
+
+        // =================================================
+        // REMOVE DUPLICATE INCIDENTS
+        //
+        // Two records are considered duplicates when they
+        // have the same:
+        //
+        // - Disaster type
+        // - Country
+        // - Location
+        // - Latitude
+        // - Longitude
+        //
+        // The ID is intentionally NOT used because duplicate
+        // database records can have different IDs.
+        //
+        const uniqueDisasters = Array.from(
+          new Map(
+            disasterList.map((disaster) => {
+
+              const duplicateKey = [
+                disaster.type ?? "",
+                disaster.country ?? "",
+                disaster.location ?? "",
+                disaster.latitude ?? "",
+                disaster.longitude ?? "",
+              ]
+                .map((value) =>
+                  String(value).trim().toLowerCase()
+                )
+                .join("|")
+
+              return [
+                duplicateKey,
+                disaster,
+              ]
+
+            })
+          ).values()
+        )
+
+        console.log(
+          "Unique disasters displayed:",
+          uniqueDisasters
+        )
+
+        console.log(
+          `Removed ${
+            disasterList.length - uniqueDisasters.length
+          } duplicate incident(s)`
+        )
+
+        setDisasters(uniqueDisasters)
 
       })
 
@@ -108,11 +164,8 @@ function Disasters() {
       })
 
   }, [])
-
-
   // =====================================================
   // DISASTER TYPES
-  // =====================================================
 
   const disasterTypes = useMemo(() => {
 
@@ -126,58 +179,106 @@ function Disasters() {
     ]
 
   }, [disasters])
-
-
   // =====================================================
   // FILTER DISASTERS
-  // =====================================================
 
-  const filteredDisasters = useMemo(() => {
+const filteredDisasters = useMemo(() => {
 
-    return disasters.filter((disaster) => {
+  return disasters.filter((disaster) => {
 
-      const search = searchTerm.toLowerCase()
+    // Hide incidents that do not have a valid severity
+    const severity = Number(disaster.severity)
 
-      const matchesSearch =
-        disaster.type?.toLowerCase().includes(search) ||
-        disaster.country?.toLowerCase().includes(search) ||
-        disaster.location?.toLowerCase().includes(search)
+    if (!Number.isFinite(severity) || severity < 1) {
+      return false
+    }
 
-      const matchesType =
-        typeFilter === "All" ||
-        disaster.type === typeFilter
+    const search = searchTerm.toLowerCase().trim()
 
-      const severity = Number(disaster.severity)
+    const matchesSearch =
+      !search ||
+      disaster.type?.toLowerCase().includes(search) ||
+      disaster.country?.toLowerCase().includes(search) ||
+      disaster.location?.toLowerCase().includes(search)
 
-      const matchesSeverity =
-        severityFilter === "All" ||
-        (severityFilter === "critical" && severity >= 8) ||
-        (severityFilter === "high" && severity >= 6 && severity < 8) ||
-        (severityFilter === "medium" && severity >= 4 && severity < 6) ||
-        (severityFilter === "low" && severity >= 1 && severity < 4)
+    const matchesType =
+      typeFilter === "All" ||
+      disaster.type === typeFilter
 
-      return (
-        matchesSearch &&
-        matchesType &&
-        matchesSeverity
+    const matchesSeverity =
+      severityFilter === "All" ||
+      (
+        severityFilter === "critical" &&
+        severity >= 8
+      ) ||
+      (
+        severityFilter === "high" &&
+        severity >= 6 &&
+        severity < 8
+      ) ||
+      (
+        severityFilter === "medium" &&
+        severity >= 4 &&
+        severity < 6
+      ) ||
+      (
+        severityFilter === "low" &&
+        severity >= 1 &&
+        severity < 4
       )
 
-    })
+    return (
+      matchesSearch &&
+      matchesType &&
+      matchesSeverity
+    )
+
+  })
+
+}, [
+  disasters,
+  searchTerm,
+  typeFilter,
+  severityFilter,
+])
+
+    
+  // =====================================================
+  // RESET PAGE WHEN FILTER CHANGES
+
+  useEffect(() => {
+
+    setCurrentPage(1)
 
   }, [
-    disasters,
     searchTerm,
     typeFilter,
     severityFilter,
   ])
+  // =====================================================
+  // PAGINATION
 
+  const totalPages = Math.ceil(
+    filteredDisasters.length / ITEMS_PER_PAGE
+  )
 
+  const startIndex =
+    (currentPage - 1) * ITEMS_PER_PAGE
+
+  const endIndex =
+    startIndex + ITEMS_PER_PAGE
+
+  const currentDisasters =
+    filteredDisasters.slice(
+      startIndex,
+      endIndex
+    )
   // =====================================================
   // SUMMARY COUNTS
-  // =====================================================
 
   const criticalCount = disasters.filter(
-    (disaster) => Number(disaster.severity) >= 8
+    (disaster) =>
+      Number(disaster.severity) >= 8
   ).length
 
   const highCount = disasters.filter(
@@ -197,24 +298,39 @@ function Disasters() {
       Number(disaster.severity) >= 1 &&
       Number(disaster.severity) < 4
   ).length
-
-
   // =====================================================
   // CLEAR FILTERS
-  // =====================================================
 
   function clearFilters() {
 
     setSearchTerm("")
     setTypeFilter("All")
     setSeverityFilter("All")
+    setCurrentPage(1)
 
   }
+  // =====================================================
+  // PAGINATION FUNCTIONS
 
+  function goToPreviousPage() {
 
+    setCurrentPage((page) =>
+      Math.max(page - 1, 1)
+    )
+
+  }
+  function goToNextPage() {
+
+    setCurrentPage((page) =>
+      Math.min(
+        page + 1,
+        Math.max(totalPages, 1)
+      )
+    )
+
+  }
   // =====================================================
   // SEVERITY LABEL
-  // =====================================================
 
   function getSeverityLabel(severity) {
 
@@ -227,11 +343,8 @@ function Disasters() {
 
     return "Not rated"
   }
-
-
   // =====================================================
   // SEVERITY STYLE
-  // =====================================================
 
   function getSeverityStyle(severity) {
 
@@ -243,7 +356,6 @@ function Disasters() {
         badge:
           "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900",
         dot: "bg-red-500",
-        bar: "bg-red-500",
       }
 
     }
@@ -254,7 +366,6 @@ function Disasters() {
         badge:
           "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-900",
         dot: "bg-orange-500",
-        bar: "bg-orange-500",
       }
 
     }
@@ -265,7 +376,6 @@ function Disasters() {
         badge:
           "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900",
         dot: "bg-amber-500",
-        bar: "bg-amber-500",
       }
 
     }
@@ -276,7 +386,6 @@ function Disasters() {
         badge:
           "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900",
         dot: "bg-emerald-500",
-        bar: "bg-emerald-500",
       }
 
     }
@@ -285,7 +394,6 @@ function Disasters() {
       badge:
         "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
       dot: "bg-slate-400",
-      bar: "bg-slate-400",
     }
 
   }
@@ -299,7 +407,12 @@ function Disasters() {
 
     return (
 
-      <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="
+        min-h-[60vh]
+        flex
+        items-center
+        justify-center
+      ">
 
         <div className="text-center">
 
@@ -316,7 +429,12 @@ function Disasters() {
             mx-auto
           " />
 
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-4">
+          <p className="
+            text-sm
+            text-slate-500
+            dark:text-slate-400
+            mt-4
+          ">
             Loading disaster intelligence...
           </p>
 
@@ -341,10 +459,10 @@ function Disasters() {
         max-w-2xl
         mx-auto
         mt-10
-        bg-blue-50
-        dark:bg-blue-950
+        bg-red-50
+        dark:bg-red-950/30
         border
-        border-red-400
+        border-red-200
         dark:border-red-900
         rounded-2xl
         p-8
@@ -356,15 +474,19 @@ function Disasters() {
           w-14
           h-14
           rounded-2xl
-          bg-red-50
-          dark:bg-red-950/40
+          bg-red-100
+          dark:bg-red-950/50
           flex
           items-center
           justify-center
           mx-auto
         ">
 
-          <TriangleAlert className="w-7 h-7 text-red-500" />
+          <TriangleAlert className="
+            w-7
+            h-7
+            text-red-500
+          " />
 
         </div>
 
@@ -400,7 +522,10 @@ function Disasters() {
 
   return (
 
-    <div className="space-y-5 pb-8">
+    <div className="
+      space-y-5
+      pb-8
+    ">
 
 
       {/* =================================================
@@ -420,8 +545,6 @@ function Disasters() {
         py-5
         shadow-sm
       ">
-
-        {/* Decorative background */}
 
         <div className="
           absolute
@@ -445,7 +568,6 @@ function Disasters() {
           blur-2xl
         " />
 
-
         <div className="
           relative
           flex
@@ -456,7 +578,11 @@ function Disasters() {
           gap-5
         ">
 
-          <div className="flex items-center gap-4">
+          <div className="
+            flex
+            items-center
+            gap-4
+          ">
 
             <div className="
               w-12
@@ -470,7 +596,11 @@ function Disasters() {
               shadow-blue-600/20
             ">
 
-              <ShieldAlert className="w-6 h-6 text-white" />
+              <ShieldAlert className="
+                w-6
+                h-6
+                text-white
+              " />
 
             </div>
 
@@ -544,7 +674,12 @@ function Disasters() {
               dark:border-emerald-900
             ">
 
-              <span className="relative flex h-2.5 w-2.5">
+              <span className="
+                relative
+                flex
+                h-2.5
+                w-2.5
+              ">
 
                 <span className="
                   animate-ping
@@ -554,14 +689,17 @@ function Disasters() {
                   w-full
                   rounded-full
                   bg-emerald-400
-                  opacity-75"
-                />
+                  opacity-75
+                " />
 
                 <span className="
                   relative
                   inline-flex
-                  rounded-full h-2.5 w-2.5 bg-emerald-500"
-                />
+                  rounded-full
+                  h-2.5
+                  w-2.5
+                  bg-emerald-500
+                " />
 
               </span>
 
@@ -614,30 +752,39 @@ function Disasters() {
         {/* Total */}
 
         <div className="
-          bg-indigo-100
-          dark:bg-indigo-900
+          bg-white
+          dark:bg-slate-900
           border
-          border-indigo-200
-          dark:border-indigo-800
+          border-slate-200
+          dark:border-slate-800
           rounded-xl
           p-4
           shadow-sm
         ">
 
-          <div className="flex items-center justify-between">
+          <div className="
+            flex
+            items-center
+            justify-between
+          ">
 
             <div className="
               w-9
               h-9
               rounded-lg
-              bg-blue-50
+              bg-blue-100
               dark:bg-blue-950/40
               flex
               items-center
               justify-center
             ">
 
-              <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <Activity className="
+                w-4
+                h-4
+                text-blue-600
+                dark:text-blue-400
+              " />
 
             </div>
 
@@ -696,7 +843,11 @@ function Disasters() {
             justify-center
           ">
 
-            <TriangleAlert className="w-4 h-4 text-red-500" />
+            <TriangleAlert className="
+              w-4
+              h-4
+              text-red-500
+            " />
 
           </div>
 
@@ -746,7 +897,11 @@ function Disasters() {
             justify-center
           ">
 
-            <AlertCircle className="w-4 h-4 text-orange-500" />
+            <AlertCircle className="
+              w-4
+              h-4
+              text-orange-500
+            " />
 
           </div>
 
@@ -772,7 +927,7 @@ function Disasters() {
         </div>
 
 
-        {/* Lower severity */}
+        {/* Moderate / Low */}
 
         <div className="
           bg-white
@@ -796,7 +951,11 @@ function Disasters() {
             justify-center
           ">
 
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <CheckCircle2 className="
+              w-4
+              h-4
+              text-emerald-500
+            " />
 
           </div>
 
@@ -847,10 +1006,12 @@ function Disasters() {
           gap-3
         ">
 
-
           {/* Search */}
 
-          <div className="relative flex-1">
+          <div className="
+            relative
+            flex-1
+          ">
 
             <Search className="
               absolute
@@ -866,27 +1027,30 @@ function Disasters() {
               type="text"
               placeholder="Search disaster, country or location..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) =>
+                setSearchTerm(e.target.value)
+              }
               className="
-  w-full
-  border
-  border-slate-200
-  dark:border-slate-700
-  rounded-xl
-  pl-10
-  pr-4
-  py-2.5
-  text-sm
-  bg-indigo-100
-  dark:bg-indigo-900
-  text-indigo-950
-  dark:text-indigo-50
-  placeholder-slate-400
-  focus:outline-none
-  focus:ring-2
-  focus:ring-blue-500/20
-  focus:border-blue-500
-"
+                w-full
+                border
+                border-indigo-200
+                dark:border-indigo-800
+                rounded-xl
+                pl-10
+                pr-4
+                py-2.5
+                text-sm
+                bg-indigo-100
+                dark:bg-indigo-900
+                text-indigo-950
+                dark:text-indigo-50
+                placeholder-black
+                dark:placeholder-indigo-50
+                focus:outline-none
+                focus:ring-2
+                focus:ring-blue-500/20
+                focus:border-blue-500
+              "
             />
 
           </div>
@@ -896,7 +1060,9 @@ function Disasters() {
 
           <select
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
+            onChange={(e) =>
+              setTypeFilter(e.target.value)
+            }
             className="
               lg:w-52
               border
@@ -919,12 +1085,13 @@ function Disasters() {
 
             {disasterTypes.map((type) => (
 
-              <option key={type} value={type}>
-
+              <option
+                key={type}
+                value={type}
+              >
                 {type === "All"
                   ? "All Disaster Types"
                   : type}
-
               </option>
 
             ))}
@@ -936,7 +1103,9 @@ function Disasters() {
 
           <select
             value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
+            onChange={(e) =>
+              setSeverityFilter(e.target.value)
+            }
             className="
               lg:w-48
               border
@@ -1060,20 +1229,18 @@ function Disasters() {
       </div>
 
 
-      {/* =================================================
-          DISASTER TABLE
-      ================================================= */}
+      {/*  DISASTER TABLE*/}
 
       <div className="
-  bg-blue-50
-  dark:bg-blue-950
-  rounded-2xl
-  border
-  border-blue-200
-  dark:border-blue-800
-  shadow-sm
-  overflow-hidden
-">
+        bg-blue-50
+        dark:bg-blue-950
+        rounded-2xl
+        border
+        border-blue-200
+        dark:border-blue-800
+        shadow-sm
+        overflow-hidden
+      ">
 
 
         {/* Table heading */}
@@ -1094,14 +1261,18 @@ function Disasters() {
 
           <div>
 
-            <div className="flex items-center gap-2">
+            <div className="
+              flex
+              items-center
+              gap-2
+            ">
 
               <div className="
                 w-8
                 h-8
                 rounded-lg
-                bg-blue-50
-                dark:bg-blue-950/40
+                bg-blue-100
+                dark:bg-blue-950/60
                 flex
                 items-center
                 justify-center
@@ -1133,7 +1304,14 @@ function Disasters() {
               dark:text-slate-400
               mt-1
             ">
-              Showing {filteredDisasters.length} of {disasters.length} reported events
+
+              {filteredDisasters.length > 0
+                ? `Showing ${startIndex + 1}–${Math.min(
+                    endIndex,
+                    filteredDisasters.length
+                  )} of ${filteredDisasters.length} events`
+                : "No events found"}
+
             </p>
 
           </div>
@@ -1149,7 +1327,12 @@ function Disasters() {
             dark:text-slate-400
           ">
 
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="
+              w-2
+              h-2
+              rounded-full
+              bg-emerald-500
+            " />
 
             Monitoring active
 
@@ -1165,9 +1348,9 @@ function Disasters() {
           <table className="w-full">
 
             <thead className="
-  bg-indigo-100
-  dark:bg-indigo-900/70
-">
+              bg-indigo-100
+              dark:bg-indigo-900/70
+            ">
 
               <tr>
 
@@ -1252,12 +1435,14 @@ function Disasters() {
               dark:divide-slate-800
             ">
 
-              {filteredDisasters.length > 0 ? (
+              {currentDisasters.length > 0 ? (
 
-                filteredDisasters.map((disaster) => {
+                currentDisasters.map((disaster) => {
 
                   const severityStyle =
-                    getSeverityStyle(disaster.severity)
+                    getSeverityStyle(
+                      disaster.severity
+                    )
 
                   return (
 
@@ -1271,12 +1456,15 @@ function Disasters() {
                       "
                     >
 
-
                       {/* Incident */}
 
                       <td className="px-5 py-4">
 
-                        <div className="flex items-center gap-3">
+                        <div className="
+                          flex
+                          items-center
+                          gap-3
+                        ">
 
                           <div className="
                             w-9
@@ -1335,7 +1523,11 @@ function Disasters() {
                         dark:text-slate-300
                       ">
 
-                        <div className="flex items-center gap-2">
+                        <div className="
+                          flex
+                          items-center
+                          gap-2
+                        ">
 
                           <Globe className="
                             w-3.5
@@ -1360,7 +1552,11 @@ function Disasters() {
                         dark:text-slate-300
                       ">
 
-                        <div className="flex items-center gap-2">
+                        <div className="
+                          flex
+                          items-center
+                          gap-2
+                        ">
 
                           <MapPin className="
                             w-3.5
@@ -1399,7 +1595,9 @@ function Disasters() {
                             ${severityStyle.dot}
                           `} />
 
-                          {getSeverityLabel(disaster.severity)}
+                          {getSeverityLabel(
+                            disaster.severity
+                          )}
 
                         </span>
 
@@ -1408,41 +1606,72 @@ function Disasters() {
 
                       {/* Action */}
 
-                      <td className="px-5 py-4 text-right">
+                      <td className="
+                        px-5
+                        py-4
+                        text-right
+                      ">
+{Number(disaster.severity) > 0 ? (
 
-                        <button
-                          onClick={() => {
-                            console.log(
-                              "Selected disaster:",
-                              disaster
-                            )
+  <button
+    onClick={() => {
+      console.log("Selected disaster:", disaster)
+      setSelectedDisaster(disaster)
+    }}
+    className="
+      inline-flex
+      items-center
+      gap-1.5
+      px-3
+      py-1.5
+      rounded-lg
+      text-xs
+      font-semibold
+      text-blue-600
+      dark:text-blue-400
+      bg-blue-50
+      dark:bg-blue-950/30
+      hover:bg-blue-100
+      dark:hover:bg-blue-950/60
+      transition-colors
+    "
+  >
 
-                            setSelectedDisaster(disaster)
-                          }}
-                          className="
-                            inline-flex
-                            items-center
-                            gap-1.5
-                            px-3
-                            py-1.5
-                            rounded-lg
-                            text-xs
-                            font-semibold
-                            text-blue-600
-                            dark:text-blue-400
-                            bg-blue-50
-                            dark:bg-blue-950/30
-                            hover:bg-blue-100
-                            dark:hover:bg-blue-950/60
-                            transition-colors
-                          "
-                        >
+    <Eye className="w-3.5 h-3.5" />
 
-                          <Eye className="w-3.5 h-3.5" />
+    Inspect
 
-                          Inspect
+  </button>
 
-                        </button>
+) : (
+
+  <span
+    className="
+      inline-flex
+      items-center
+      gap-1.5
+      px-3
+      py-1.5
+      rounded-lg
+      text-xs
+      font-semibold
+      text-slate-400
+      dark:text-slate-500
+      bg-slate-100
+      dark:bg-slate-800
+      border
+      border-slate-200
+      dark:border-slate-700
+      cursor-not-allowed
+    "
+  >
+
+    Inspect
+
+  </span>
+
+)}
+                        
 
                       </td>
 
@@ -1458,7 +1687,10 @@ function Disasters() {
 
                   <td
                     colSpan="5"
-                    className="text-center py-14"
+                    className="
+                      text-center
+                      py-14
+                    "
                   >
 
                     <div className="
@@ -1526,12 +1758,152 @@ function Disasters() {
 
         </div>
 
+
+        {/* PAGINATION*/}
+
+        {filteredDisasters.length > ITEMS_PER_PAGE && (
+
+          <div className="
+            flex
+            flex-col
+            sm:flex-row
+            items-center
+            justify-between
+            gap-3
+            px-5
+            py-4
+            border-t
+            border-slate-200
+            dark:border-slate-800
+            bg-indigo-50/60
+            dark:bg-indigo-950/30
+          ">
+
+            {/* Result count */}
+
+            <p className="
+              text-xs
+              text-slate-500
+              dark:text-slate-400
+            ">
+
+              Page {currentPage} of {totalPages}
+
+            </p>
+
+
+            {/* Pagination buttons */}
+
+            <div className="
+              flex
+              items-center
+              gap-2
+            ">
+
+              <button
+                onClick={goToPreviousPage}
+                disabled={currentPage === 1}
+                className="
+                  inline-flex
+                  items-center
+                  gap-1.5
+                  px-3
+                  py-2
+                  rounded-lg
+                  border
+                  border-slate-200
+                  dark:border-slate-700
+                  bg-white
+                  dark:bg-slate-800
+                  text-xs
+                  font-semibold
+                  text-slate-700
+                  dark:text-slate-200
+                  hover:bg-slate-50
+                  dark:hover:bg-slate-700
+                  disabled:opacity-40
+                  disabled:cursor-not-allowed
+                  transition
+                "
+              >
+
+                <ChevronLeft className="
+                  w-4
+                  h-4
+                " />
+
+                Previous
+
+              </button>
+
+
+              {/* Page number */}
+
+              <div className="
+                min-w-9
+                h-9
+                px-3
+                rounded-lg
+                bg-blue-600
+                text-white
+                flex
+                items-center
+                justify-center
+                text-xs
+                font-bold
+              ">
+
+                {currentPage}
+
+              </div>
+
+
+              <button
+                onClick={goToNextPage}
+                disabled={
+                  currentPage === totalPages
+                }
+                className="
+                  inline-flex
+                  items-center
+                  gap-1.5
+                  px-3
+                  py-2
+                  rounded-lg
+                  border
+                  border-slate-200
+                  dark:border-slate-700
+                  bg-white
+                  dark:bg-slate-800
+                  text-xs
+                  font-semibold
+                  text-slate-700
+                  dark:text-slate-200
+                  hover:bg-slate-50
+                  dark:hover:bg-slate-700
+                  disabled:opacity-40
+                  disabled:cursor-not-allowed
+                  transition
+                "
+              >
+
+                Next
+
+                <ChevronRight className="
+                  w-4
+                  h-4
+                " />
+
+              </button>
+
+            </div>
+
+          </div>
+
+        )}
+
       </div>
-
-
-      {/* =================================================
-          DISASTER DETAILS MODAL
-      ================================================= */}
+      {/* DISASTER DETAILS MODAL*/}
 
       {selectedDisaster && (
 
@@ -1548,18 +1920,18 @@ function Disasters() {
         ">
 
           <div className="
-  bg-blue-50
-  dark:bg-blue-950
-  w-full
-  max-w-xl
-  rounded-2xl
-  shadow-2xl
-  border
-  border-blue-200
-  dark:border-blue-800
-  max-h-[90vh]
-  overflow-y-auto
-">
+            bg-blue-50
+            dark:bg-blue-950
+            w-full
+            max-w-xl
+            rounded-2xl
+            shadow-2xl
+            border
+            border-blue-200
+            dark:border-blue-800
+            max-h-[90vh]
+            overflow-y-auto
+          ">
 
 
             {/* Modal Header */}
@@ -1569,7 +1941,7 @@ function Disasters() {
               top-0
               z-10
               bg-blue-50
-dark:bg-blue-950
+              dark:bg-blue-950
               flex
               items-center
               justify-between
@@ -1577,17 +1949,21 @@ dark:bg-blue-950
               py-4
               border-b
               border-blue-200
-dark:border-blue-800
+              dark:border-blue-800
             ">
 
-              <div className="flex items-center gap-3">
+              <div className="
+                flex
+                items-center
+                gap-3
+              ">
 
                 <div className="
                   w-10
                   h-10
                   rounded-xl
-                  bg-blue-50
-                  dark:bg-blue-950/40
+                  bg-blue-100
+                  dark:bg-blue-950/50
                   flex
                   items-center
                   justify-center
@@ -1626,9 +2002,10 @@ dark:border-blue-800
 
               </div>
 
-
               <button
-                onClick={() => setSelectedDisaster(null)}
+                onClick={() =>
+                  setSelectedDisaster(null)
+                }
                 className="
                   p-2
                   rounded-lg
@@ -1650,7 +2027,10 @@ dark:border-blue-800
 
             {/* Modal Content */}
 
-            <div className="p-6 space-y-5">
+            <div className="
+              p-6
+              space-y-5
+            ">
 
 
               {/* Main incident */}
@@ -1665,7 +2045,11 @@ dark:border-blue-800
                 p-4
               ">
 
-                <div className="flex items-center justify-between">
+                <div className="
+                  flex
+                  items-center
+                  justify-between
+                ">
 
                   <div>
 
@@ -1686,7 +2070,8 @@ dark:border-blue-800
                       dark:text-white
                       mt-1
                     ">
-                      {selectedDisaster.type || "Unknown"}
+                      {selectedDisaster.type ||
+                        "Unknown"}
                     </p>
 
                   </div>
@@ -1701,14 +2086,22 @@ dark:border-blue-800
                     border
                     text-xs
                     font-semibold
-                    ${getSeverityStyle(selectedDisaster.severity).badge}
+                    ${
+                      getSeverityStyle(
+                        selectedDisaster.severity
+                      ).badge
+                    }
                   `}>
 
                     <span className={`
                       w-1.5
                       h-1.5
                       rounded-full
-                      ${getSeverityStyle(selectedDisaster.severity).dot}
+                      ${
+                        getSeverityStyle(
+                          selectedDisaster.severity
+                        ).dot
+                      }
                     `} />
 
                     {getSeverityLabel(
@@ -1731,20 +2124,23 @@ dark:border-blue-800
                 gap-3
               ">
 
-
                 {/* Country */}
 
                 <div className="
                   rounded-xl
-border
-border-indigo-200
-dark:border-indigo-800
-bg-indigo-100/60
-dark:bg-indigo-900/50
-p-4
+                  border
+                  border-indigo-200
+                  dark:border-indigo-800
+                  bg-indigo-100/60
+                  dark:bg-indigo-900/50
+                  p-4
                 ">
 
-                  <div className="flex items-center gap-2">
+                  <div className="
+                    flex
+                    items-center
+                    gap-2
+                  ">
 
                     <Globe className="
                       w-4
@@ -1771,7 +2167,8 @@ p-4
                     dark:text-slate-200
                     mt-2
                   ">
-                    {selectedDisaster.country || "—"}
+                    {selectedDisaster.country ||
+                      "—"}
                   </p>
 
                 </div>
@@ -1787,7 +2184,11 @@ p-4
                   p-4
                 ">
 
-                  <div className="flex items-center gap-2">
+                  <div className="
+                    flex
+                    items-center
+                    gap-2
+                  ">
 
                     <MapPin className="
                       w-4
@@ -1814,7 +2215,8 @@ p-4
                     dark:text-slate-200
                     mt-2
                   ">
-                    {selectedDisaster.location || "—"}
+                    {selectedDisaster.location ||
+                      "—"}
                   </p>
 
                 </div>
@@ -1848,12 +2250,11 @@ p-4
                     dark:text-slate-200
                     mt-2
                   ">
-                    {selectedDisaster.latitude ?? "—"}
+                    {selectedDisaster.latitude ??
+                      "—"}
                   </p>
 
                 </div>
-
-
                 {/* Longitude */}
 
                 <div className="
@@ -1882,11 +2283,11 @@ p-4
                     dark:text-slate-200
                     mt-2
                   ">
-                    {selectedDisaster.longitude ?? "—"}
+                    {selectedDisaster.longitude ??
+                      "—"}
                   </p>
 
                 </div>
-
 
               </div>
 
@@ -1908,7 +2309,11 @@ p-4
                   p-4
                 ">
 
-                  <div className="flex items-center gap-2">
+                  <div className="
+                    flex
+                    items-center
+                    gap-2
+                  ">
 
                     <Activity className="
                       w-4
@@ -1935,7 +2340,8 @@ p-4
                     dark:text-slate-200
                     mt-2
                   ">
-                    {selectedDisaster.alert_level || "—"}
+                    {selectedDisaster.alert_level ||
+                      "—"}
                   </p>
 
                 </div>
@@ -1949,7 +2355,11 @@ p-4
                   p-4
                 ">
 
-                  <div className="flex items-center gap-2">
+                  <div className="
+                    flex
+                    items-center
+                    gap-2
+                  ">
 
                     <Hash className="
                       w-4
@@ -1987,7 +2397,10 @@ p-4
 
               {/* Action buttons */}
 
-              <div className="pt-2 space-y-2">
+              <div className="
+                pt-2
+                space-y-2
+              ">
 
                 <button
                   onClick={handleViewImpact}
@@ -2013,7 +2426,10 @@ p-4
                   "
                 >
 
-                  <MapPin className="w-4 h-4" />
+                  <MapPin className="
+                    w-4
+                    h-4
+                  " />
 
                   {impactLoading
                     ? "Loading impact..."
@@ -2023,7 +2439,9 @@ p-4
 
 
                 <button
-                  onClick={() => setSelectedDisaster(null)}
+                  onClick={() =>
+                    setSelectedDisaster(null)
+                  }
                   className="
                     w-full
                     py-3
@@ -2055,7 +2473,7 @@ p-4
     </div>
 
   )
-}
 
+}
 
 export default Disasters
