@@ -12,3 +12,5 @@ from .field_operation import FieldOperation
 from app.models.depot import Depot
 from app.models.road import Road
 from app.models.vehicle import Vehicle
+from app.models.mission import Mission
+from app.models.user import User

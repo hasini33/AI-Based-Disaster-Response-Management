@@ -17,7 +17,24 @@ class Disaster(Base):
 
     latitude = Column(Float)
     longitude = Column(Float)
-    
+    satellite_damage_percent = Column(Float, nullable=True)
+    event_date = Column(DateTime, nullable=True)
+
+    zone_id = Column(
+        Integer,
+        ForeignKey("zones.id"),
+        nullable=True
+    )
+
+    satellite_damage_percent = Column(
+        Float,
+        nullable=True
+    )
+
+    zone = relationship(
+        "Zone",
+        back_populates="disasters"
+    )
     location = Column(Geometry("POINT", srid=4326))
     event_date = Column(DateTime, nullable=True)
     zone_id = Column(Integer, ForeignKey("zones.id"), nullable=True)

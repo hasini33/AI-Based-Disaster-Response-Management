@@ -33,6 +33,12 @@ class Zone(Base):
 
     severity_score = Column(Float, default=0.0)
 
+    priority_override = Column(
+    Float,
+    nullable=True,
+    default=None
+)
+
     damage_percent = Column(Float, default=0.0)
 
     elderly_percent = Column(Float, default=0.0)
