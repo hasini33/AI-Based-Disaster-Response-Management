@@ -2,50 +2,32 @@ import { useEffect, useState } from "react"
 import { Moon, Sun } from "lucide-react"
 
 function ThemeToggle() {
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem("theme") === "dark"
-  })
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark")
 
   useEffect(() => {
-    const root = document.documentElement
-
-    root.classList.toggle("dark", darkMode)
-
+    document.documentElement.classList.toggle("dark", darkMode)
     localStorage.setItem("theme", darkMode ? "dark" : "light")
   }, [darkMode])
 
+  useEffect(() => {
+    const handleThemeChange = (event) => setDarkMode(event.detail === "dark")
+    window.addEventListener("theme-changed", handleThemeChange)
+    return () => window.removeEventListener("theme-changed", handleThemeChange)
+  }, [])
+
   return (
     <button
-      onClick={() => setDarkMode((prev) => !prev)}
+      type="button"
+      data-testid="button-toggle-theme"
+      onClick={() => setDarkMode((previous) => !previous)}
       title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-      className="
-        flex items-center gap-2
-        rounded-lg border
-        px-3 py-2
-        transition-colors duration-200
-
-        border-gray-200
-        bg-white
-        text-gray-700
-        hover:bg-gray-100
-
-        dark:border-gray-700
-        dark:bg-gray-800
-        dark:text-gray-200
-        dark:hover:bg-gray-700
-      "
+      aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+      className="flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--line))] px-3 text-[hsl(var(--ink-soft))] transition hover:border-[hsl(var(--amber)/.45)] hover:bg-[hsl(var(--amber-soft))] hover:text-[hsl(var(--foreground))]"
     >
-      {darkMode ? (
-        <>
-          <Sun className="h-4 w-4 text-yellow-400" />
-          <span className="text-sm font-medium">Light</span>
-        </>
-      ) : (
-        <>
-          <Moon className="h-4 w-4" />
-          <span className="text-sm font-medium">Dark</span>
-        </>
-      )}
+      {darkMode ? <Sun size={16} className="text-[hsl(var(--amber))]" /> : <Moon size={16} />}
+      <span className="hidden text-[10px] font-bold uppercase tracking-wider sm:inline">
+        {darkMode ? "Light" : "Dark"}
+      </span>
     </button>
   )
 }
