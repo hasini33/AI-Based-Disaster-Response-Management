@@ -154,9 +154,7 @@ function Login() {
         </svg>
 
         <div className="auth-visual__content">
-          <p className="auth-kicker">
-            Aegis Operations / secure node 04
-          </p>
+          
 
           <h1 className="auth-title" id="auth-platform-title">
             Disaster Response
