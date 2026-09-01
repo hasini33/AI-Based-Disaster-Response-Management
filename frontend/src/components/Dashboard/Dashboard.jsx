@@ -6,7 +6,6 @@ import {
   Boxes,
   CheckCircle2,
   ChevronRight,
-  Clock3,
   Crosshair,
   HeartPulse,
   Home,
@@ -101,6 +100,25 @@ const readiness = [
 ]
 
 
+function getLatestDisaster(disasters) {
+  if (!Array.isArray(disasters) || disasters.length === 0) {
+    return null
+  }
+
+  const validDisasters = disasters.filter(
+    (disaster) => disaster && disaster.id != null
+  )
+
+  if (validDisasters.length === 0) {
+    return null
+  }
+
+  return [...validDisasters].sort(
+    (a, b) => Number(b.id) - Number(a.id)
+  )[0]
+}
+
+
 function Dashboard() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -118,56 +136,93 @@ function Dashboard() {
 
 
   /*
-   * STEP 1
+   * ---------------------------------------------------------
+   * LOAD LATEST DISASTER
+   * ---------------------------------------------------------
    *
-   * If the user comes directly to Dashboard and there is
-   * no disasterId in the URL, automatically select a disaster.
+   * The latest disaster is determined by the highest ID.
    *
-   * We select the highest severity disaster so the dashboard
-   * immediately shows the most important incident.
+   * Example:
+   * 1500
+   * 1501
+   * 1599
+   * 1600
+   * 1601  <-- latest
+   *
+   * The dashboard automatically focuses on 1601.
    */
-  useEffect(() => {
-    if (urlDisasterId) {
-      setSelectedDisasterId(Number(urlDisasterId))
-      return
-    }
+  const loadLatestDisaster = async () => {
+    try {
+      const disasters = await getDisasters()
 
-    const loadDefaultDisaster = async () => {
-      try {
-        const disasters = await getDisasters()
-
-        if (!disasters || disasters.length === 0) {
-          return
-        }
-
-        // Find the disaster with the highest severity
-        const highestSeverityDisaster = [...disasters].sort(
-          (a, b) => Number(b.severity || 0) - Number(a.severity || 0)
-        )[0]
-
-        if (highestSeverityDisaster?.id) {
-          setSelectedDisasterId(Number(highestSeverityDisaster.id))
-
-          // Keep the selected incident in the URL
-          navigate(
-            `/?disasterId=${highestSeverityDisaster.id}`,
-            { replace: true }
-          )
-        }
-      } catch (error) {
-        console.error("Unable to load default disaster:", error)
+      if (!Array.isArray(disasters) || disasters.length === 0) {
+        return
       }
-    }
 
-    loadDefaultDisaster()
-  }, [urlDisasterId, navigate])
+      const latestDisaster = getLatestDisaster(disasters)
+
+      if (!latestDisaster?.id) {
+        return
+      }
+
+      const latestId = Number(latestDisaster.id)
+
+      setSelectedDisasterId((currentId) => {
+        if (currentId !== latestId) {
+          return latestId
+        }
+
+        return currentId
+      })
+
+      /*
+       * Keep the latest disaster in the URL.
+       */
+      const currentUrlId = searchParams.get("disasterId")
+
+      if (Number(currentUrlId) !== latestId) {
+        navigate(
+          `/dashboard?disasterId=${latestId}`,
+          { replace: true }
+        )
+      }
+    } catch (error) {
+      console.error(
+        "Unable to load latest disaster:",
+        error
+      )
+    }
+  }
 
 
   /*
-   * STEP 2
+   * ---------------------------------------------------------
+   * INITIAL LOAD + AUTOMATIC REFRESH
+   * ---------------------------------------------------------
    *
-   * Once we have a selected disaster ID,
-   * load its impact information.
+   * The backend is checked every 30 seconds.
+   *
+   * If a new disaster is added to the database,
+   * the latest ID changes and the map automatically
+   * focuses on the new incident.
+   */
+  useEffect(() => {
+    loadLatestDisaster()
+
+    const refreshInterval = setInterval(() => {
+      loadLatestDisaster()
+    }, 30000)
+
+    return () => {
+      clearInterval(refreshInterval)
+    }
+  }, [])
+
+
+  /*
+   * ---------------------------------------------------------
+   * LOAD SELECTED DISASTER IMPACT
+   * ---------------------------------------------------------
    */
   const loadSelectedImpact = () => {
     if (!selectedDisasterId) {
@@ -183,7 +238,11 @@ function Dashboard() {
         setSelectedDisaster(data)
       })
       .catch((error) => {
-        console.error("Unable to load selected disaster:", error)
+        console.error(
+          "Unable to load selected disaster:",
+          error
+        )
+
         setSelectedDisaster(null)
         setSelectedError(true)
       })
@@ -204,9 +263,11 @@ function Dashboard() {
       {/* HEADER */}
 
       <section className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
+
         <div>
 
           <div className="mb-3 flex items-center gap-2">
+
             <span className="status-dot status-dot--pulse text-[hsl(var(--teal))]" />
 
             <span className="eyebrow">
@@ -221,31 +282,38 @@ function Dashboard() {
           </div>
 
           <h1 className="max-w-3xl text-[clamp(2rem,4vw,3.7rem)] font-extrabold leading-[.98] tracking-[-.075em] text-[hsl(var(--foreground))]">
+
             Dashboard
             <span className="text-[hsl(var(--coral))]">.</span>
+
           </h1>
 
           <p className="mt-4 max-w-xl text-sm leading-6 text-[hsl(var(--ink-soft))]">
             A single operating picture for incident posture, population exposure
             and the resources.
-          </p>  
+          </p>
 
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
 
           <div className="pill pill--live">
+
             <span className="status-dot status-dot--pulse" />
+
             System nominal
+
           </div>
 
         </div>
+
       </section>
 
 
       {/* STAT CARDS */}
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+
         {stats.map((stat, index) => (
           <StatCard
             key={stat.title}
@@ -253,6 +321,7 @@ function Dashboard() {
             index={index}
           />
         ))}
+
       </section>
 
 
@@ -273,6 +342,7 @@ function Dashboard() {
               </div>
 
               <div>
+
                 <p className="card-title">
                   Disaster impact map
                 </p>
@@ -280,6 +350,7 @@ function Dashboard() {
                 <p className="card-subtitle">
                   Live incident locations, perimeters and selected impact geometry
                 </p>
+
               </div>
 
             </div>
@@ -341,9 +412,11 @@ function Dashboard() {
             </div>
 
             <span className="mono text-[9px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
+
               {selectedDisasterId
                 ? `ID ${selectedDisasterId}`
                 : "AUTO FOCUS"}
+
             </span>
 
           </div>
@@ -369,8 +442,6 @@ function Dashboard() {
 
             ) : selectedError ? (
 
-              /* ERROR */
-
               <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
 
                 <TriangleAlert
@@ -395,8 +466,6 @@ function Dashboard() {
               </div>
 
             ) : selectedDisaster ? (
-
-              /* INCIDENT FOUND */
 
               <div className="flex flex-1 flex-col">
 
@@ -471,8 +540,6 @@ function Dashboard() {
 
             ) : (
 
-              /* NO DATA */
-
               <div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
 
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[hsl(var(--surface-muted))] text-[hsl(var(--ink-faint))]">
@@ -484,7 +551,7 @@ function Dashboard() {
                 </p>
 
                 <p className="mt-2 max-w-xs text-[11px] leading-5 text-[hsl(var(--ink-soft))]">
-                  Finding the highest-priority active incident...
+                  Finding the latest active incident...
                 </p>
 
               </div>

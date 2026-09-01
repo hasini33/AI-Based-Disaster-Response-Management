@@ -1,6 +1,14 @@
+
 import { useState } from "react"
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom"
 import "./App.css"
+
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useLocation,
+  Navigate,
+} from "react-router-dom"
 
 import Navbar from "./components/Navbar/Navbar"
 import Sidebar from "./components/Sidebar/Sidebar"
@@ -16,6 +24,7 @@ import ResponseCoordination from "./pages/ResponseCoordination."
 import AIDemand from "./pages/AIDemand"
 import Reports from "./pages/Reports"
 
+
 function OperationsShell() {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth >= 768
@@ -23,14 +32,26 @@ function OperationsShell() {
 
   const location = useLocation()
 
-  // Login page should not show Navbar/Sidebar
+  // ---------------------------------------------------------
+  // LOGIN PAGE
+  // ---------------------------------------------------------
+  // Login must appear without Navbar or Sidebar.
+  // ---------------------------------------------------------
+
   if (location.pathname === "/login") {
     return <Login />
   }
 
+  // ---------------------------------------------------------
+  // MAIN APPLICATION
+  // ---------------------------------------------------------
+
   return (
     <div className="app-shell">
-      <div className="app-noise" aria-hidden="true" />
+      <div
+        className="app-noise"
+        aria-hidden="true"
+      />
 
       <Navbar
         sidebarOpen={sidebarOpen}
@@ -55,16 +76,44 @@ function OperationsShell() {
         />
       )}
 
-      <main className={`app-main ${sidebarOpen ? "app-main--wide" : ""}`}>
+      <main
+        className={`app-main ${
+          sidebarOpen ? "app-main--wide" : ""
+        }`}
+      >
+
         <Routes>
+
+          {/* -------------------------------------------------
+              ROOT
+              ------------------------------------------------- */}
+
           <Route
             path="/"
+            element={
+              <Navigate
+                to="/login"
+                replace
+              />
+            }
+          />
+
+          {/* -------------------------------------------------
+              DASHBOARD
+              ------------------------------------------------- */}
+
+          <Route
+            path="/dashboard"
             element={
               <div className="app-main__inner">
                 <Dashboard />
               </div>
             }
           />
+
+          {/* -------------------------------------------------
+              DISASTERS
+              ------------------------------------------------- */}
 
           <Route
             path="/disasters"
@@ -75,6 +124,10 @@ function OperationsShell() {
             }
           />
 
+          {/* -------------------------------------------------
+              IMPACT ZONES
+              ------------------------------------------------- */}
+
           <Route
             path="/zones"
             element={
@@ -83,6 +136,10 @@ function OperationsShell() {
               </div>
             }
           />
+
+          {/* -------------------------------------------------
+              RESOURCES
+              ------------------------------------------------- */}
 
           <Route
             path="/resources"
@@ -93,6 +150,10 @@ function OperationsShell() {
             }
           />
 
+          {/* -------------------------------------------------
+              AI DEMAND
+              ------------------------------------------------- */}
+
           <Route
             path="/AIdemand"
             element={
@@ -102,14 +163,9 @@ function OperationsShell() {
             }
           />
 
-          <Route
-            path="/reports"
-            element={
-              <div className="app-main__inner page-enter">
-                <Reports />
-              </div>
-            }
-          />
+          {/* -------------------------------------------------
+              RESPONSE COORDINATION
+              ------------------------------------------------- */}
 
           <Route
             path="/response"
@@ -120,6 +176,23 @@ function OperationsShell() {
             }
           />
 
+          {/* -------------------------------------------------
+              REPORTS
+              ------------------------------------------------- */}
+
+          <Route
+            path="/reports"
+            element={
+              <div className="app-main__inner page-enter">
+                <Reports />
+              </div>
+            }
+          />
+
+          {/* -------------------------------------------------
+              SETTINGS
+              ------------------------------------------------- */}
+
           <Route
             path="/settings"
             element={
@@ -128,11 +201,28 @@ function OperationsShell() {
               </div>
             }
           />
+
+          {/* -------------------------------------------------
+              UNKNOWN URL
+              ------------------------------------------------- */}
+
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to="/login"
+                replace
+              />
+            }
+          />
+
         </Routes>
+
       </main>
     </div>
   )
 }
+
 
 function App() {
   return (
@@ -142,4 +232,6 @@ function App() {
   )
 }
 
+
 export default App
+

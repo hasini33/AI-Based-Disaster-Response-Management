@@ -73,7 +73,7 @@ function Login() {
       }
 
       // Go to dashboard
-      navigate("/")
+      navigate("/dashboard")
     } catch (error) {
       setFeedback({
         type: "error",
@@ -306,7 +306,7 @@ function Login() {
           <button
             type="button"
             className="auth-link"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
           >
             Continue to read-only dashboard
           </button>
