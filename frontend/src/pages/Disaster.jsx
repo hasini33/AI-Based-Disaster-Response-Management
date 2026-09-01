@@ -54,30 +54,31 @@ function Disasters() {
   // =====================================================
   // LOAD DISASTER IMPACT
 
-  async function handleViewImpact() {
+async function handleViewImpact() {
+  if (!selectedDisaster) return
 
-    if (!selectedDisaster) return
+  try {
+    setImpactLoading(true)
 
-    try {
+    const data = await getDisasterImpact(selectedDisaster.id)
 
-      setImpactLoading(true)
+    console.log("Impact data:", data)
 
-      const data = await getDisasterImpact(selectedDisaster.id)
+    // Go to the actual Dashboard route.
+    // "/" redirects to "/login", so we must use "/dashboard".
+    navigate(`/dashboard?disasterId=${selectedDisaster.id}`)
 
-      console.log("Impact data:", data)
+    // Close the disaster details modal
+    setSelectedDisaster(null)
 
-      navigate(`/?disasterId=${selectedDisaster.id}`)
-
-    } catch (error) {
-
-      console.error("Failed to fetch impact:", error)
-
-    } finally {
-
-      setImpactLoading(false)
-
-    }
+  } catch (error) {
+    console.error("Failed to fetch impact:", error)
+  } finally {
+    setImpactLoading(false)
   }
+}
+
+
   // =====================================================
   // GET DISASTERS
 

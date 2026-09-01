@@ -521,7 +521,7 @@ function Settings() {
             </span>
 
             <div>
-              <h2>Console appearance</h2>
+              <h2>Device appearance</h2>
 
               <p>
                 Choose the contrast that suits your watch.

@@ -1,180 +1,311 @@
-import { useEffect, useState } from "react"
-
-import { divIcon } from "leaflet"
-
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   RefreshCw,
   SlidersHorizontal,
-} from "lucide-react"
+} from "lucide-react";
 
 import {
+  GeoJSON,
   MapContainer,
   Marker,
-  Polygon,
   Popup,
   TileLayer,
   useMap,
-} from "react-leaflet"
+} from "react-leaflet";
 
-import "leaflet/dist/leaflet.css"
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 import {
   getDisasterImpact,
   getDisasters,
-} from "../../services/disasterService"
-
-
-/* =========================================================
-   POLYGON PARSER
-   ========================================================= */
-
-function parsePolygonWKT(wkt) {
-  if (!wkt || typeof wkt !== "string") {
-    return null
-  }
-
-  try {
-    return wkt
-      .replace(/^POLYGON\s*\(\(/i, "")
-      .replace(/\)\)\s*$/, "")
-      .split(",")
-      .map((point) => {
-        const [longitude, latitude] = point
-          .trim()
-          .split(/\s+/)
-          .map(Number)
-
-        return [latitude, longitude]
-      })
-      .filter(
-        ([latitude, longitude]) =>
-          Number.isFinite(latitude) &&
-          Number.isFinite(longitude)
-      )
-  } catch {
-    return null
-  }
-}
-
+} from "../../services/disasterService";
 
 /* =========================================================
-   MAP POSITION UPDATER
+   CONFIGURATION
    ========================================================= */
 
-function MapUpdater({
-  latitude,
-  longitude,
-}) {
-  const map = useMap()
+const NEPAL_GEOJSON_URL = "/data/nepal_disaster_zones.geojson";
+
+const NEPAL_CENTER = [28.3949, 84.124];
+const NEPAL_ZOOM = 7;
+
+/* =========================================================
+   FIT MAP TO NEPAL GEOJSON
+   Runs only when the GeoJSON is first loaded.
+   Backend data will NOT change the map position.
+   ========================================================= */
+
+function FitNepalMap({ geoJsonData }) {
+  const map = useMap();
+  const hasFitted = useRef(false);
 
   useEffect(() => {
-    if (
-      latitude != null &&
-      longitude != null &&
-      Number.isFinite(Number(latitude)) &&
-      Number.isFinite(Number(longitude))
-    ) {
-      map.setView(
-        [
-          Number(latitude),
-          Number(longitude),
-        ],
-        7,
-        {
-          animate: true,
-        }
-      )
+    if (!geoJsonData || hasFitted.current) {
+      return;
     }
-  }, [
-    latitude,
-    longitude,
-    map,
-  ])
 
-  return null
+    try {
+      const layer = L.geoJSON(geoJsonData);
+      const bounds = layer.getBounds();
+
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, {
+          padding: [20, 20],
+          maxZoom: 9,
+          animate: false,
+        });
+
+        hasFitted.current = true;
+      }
+    } catch (error) {
+      console.error("Could not fit Nepal map:", error);
+    }
+  }, [geoJsonData, map]);
+
+  return null;
 }
-
 
 /* =========================================================
    SEVERITY COLOR
    ========================================================= */
 
 function getSeverityColor(severity) {
-  if (severity >= 8) {
-    return "#c94d44"
+  const value = Number(severity);
+
+  if (value >= 8) {
+    return "#c94d44";
   }
 
-  if (severity >= 6) {
-    return "#d9674c"
+  if (value >= 6) {
+    return "#d9674c";
   }
 
-  if (severity >= 4) {
-    return "#d99a2b"
+  if (value >= 4) {
+    return "#d99a2b";
   }
 
-  return "#288b83"
+  return "#288b83";
 }
 
+/* =========================================================
+   GEOJSON DISASTER COLOR
+   ========================================================= */
+
+function getDisasterZoneColor(properties = {}) {
+  const text = [
+    properties.event_type,
+    properties.obj_desc,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (
+    text.includes("landslide") ||
+    text.includes("mass movement")
+  ) {
+    return "#d9674c";
+  }
+
+  if (
+    text.includes("flood") ||
+    text.includes("water")
+  ) {
+    return "#288b83";
+  }
+
+  if (
+    text.includes("earthquake") ||
+    text.includes("seismic")
+  ) {
+    return "#c94d44";
+  }
+
+  if (
+    text.includes("fire") ||
+    text.includes("burn")
+  ) {
+    return "#d99a2b";
+  }
+
+  return "#7c6f64";
+}
+
+/* =========================================================
+   GEOJSON STYLE
+   ========================================================= */
+
+function disasterZoneStyle(feature) {
+  const color = getDisasterZoneColor(
+    feature?.properties || {}
+  );
+
+  return {
+    color,
+    weight: 1.5,
+    opacity: 0.9,
+    fillColor: color,
+    fillOpacity: 0.32,
+  };
+}
+
+/* =========================================================
+   GEOJSON POPUP
+   ========================================================= */
+
+function onEachDisasterZone(feature, layer) {
+  const properties = feature?.properties || {};
+
+  const eventType =
+    properties.event_type || "Unknown";
+
+  const description =
+    properties.obj_desc || "Not available";
+
+  const method =
+    properties.det_method || "Not available";
+
+  const area =
+    properties.area != null
+      ? Number(properties.area).toFixed(2)
+      : "Not available";
+
+  layer.bindPopup(`
+    <div style="min-width:220px">
+      <div style="
+        font-size:13px;
+        font-weight:800;
+        margin-bottom:8px;
+      ">
+        Nepal Disaster Zone
+      </div>
+
+      <div style="
+        font-size:11px;
+        line-height:1.7;
+      ">
+        <strong>Event:</strong>
+        ${eventType}
+        <br />
+
+        <strong>Type:</strong>
+        ${description}
+        <br />
+
+        <strong>Detection:</strong>
+        ${method}
+        <br />
+
+        <strong>Area:</strong>
+        ${area}
+      </div>
+    </div>
+  `);
+}
 
 /* =========================================================
    INCIDENT MARKER
    ========================================================= */
 
-const incidentIcon = divIcon({
+const incidentIcon = L.divIcon({
   className: "incident-marker",
-  html:
-    '<span class="incident-marker__core"></span>' +
-    '<span class="incident-marker__ring"></span>',
+  html: `
+    <span class="incident-marker__core"></span>
+    <span class="incident-marker__ring"></span>
+  `,
   iconSize: [28, 28],
   iconAnchor: [14, 14],
-})
-
+});
 
 /* =========================================================
    FIND LATEST DISASTER
    ========================================================= */
 
 function getLatestDisaster(disasters) {
-  if (
-    !Array.isArray(disasters) ||
-    disasters.length === 0
-  ) {
-    return null
+  if (!Array.isArray(disasters) || disasters.length === 0) {
+    return null;
   }
 
   const validDisasters = disasters.filter(
     (disaster) =>
       disaster &&
       disaster.id != null
-  )
+  );
 
   if (validDisasters.length === 0) {
-    return null
+    return null;
   }
 
   return [...validDisasters].sort(
     (a, b) =>
       Number(b.id) - Number(a.id)
-  )[0]
+  )[0];
 }
 
+/* =========================================================
+   CHECK WHETHER COORDINATES ARE IN NEPAL
+   ========================================================= */
+
+function isValidNepalCoordinate(latitude, longitude) {
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= 26 &&
+    lat <= 31 &&
+    lng >= 80 &&
+    lng <= 89
+  );
+}
 
 /* =========================================================
-   DISASTER MAP
+   MAIN COMPONENT
    ========================================================= */
 
 function DisasterMap({
   selectedDisasterId: externalDisasterId,
 }) {
+  /* -------------------------------------------------------
+     NEPAL GEOJSON STATE
+     ------------------------------------------------------- */
 
-  const [impactData, setImpactData] = useState(null)
+  const [geoJsonData, setGeoJsonData] = useState(null);
 
-  const [disasters, setDisasters] = useState([])
+  const [geoJsonLoading, setGeoJsonLoading] =
+    useState(true);
 
-  /*
-   * No hardcoded disaster ID anymore.
-   */
+  const [geoJsonError, setGeoJsonError] =
+    useState(false);
+
+  /* -------------------------------------------------------
+     BACKEND STATE
+     ------------------------------------------------------- */
+
+  const [disasters, setDisasters] = useState([]);
+
+  const [impactData, setImpactData] = useState(null);
+
+  const [listLoading, setListLoading] =
+    useState(true);
+
+  const [impactLoading, setImpactLoading] =
+    useState(false);
+
+  const [impactError, setImpactError] =
+    useState(false);
+
+  /* -------------------------------------------------------
+     SELECTED DISASTER
+
+     IMPORTANT:
+     This controls the backend information only.
+     It does NOT control the Nepal map center.
+     ------------------------------------------------------- */
+
   const [
     selectedDisasterId,
     setSelectedDisasterId,
@@ -182,620 +313,688 @@ function DisasterMap({
     externalDisasterId != null
       ? Number(externalDisasterId)
       : null
-  )
+  );
 
-  const [loading, setLoading] = useState(true)
+  /* =======================================================
+     LOAD NEPAL GEOJSON
+     ======================================================= */
 
-  const [error, setError] = useState(false)
+  async function loadNepalGeoJSON() {
+    setGeoJsonLoading(true);
+    setGeoJsonError(false);
 
-  const [listLoading, setListLoading] = useState(true)
+    try {
+      const response = await fetch(
+        NEPAL_GEOJSON_URL,
+        {
+          cache: "no-cache",
+        }
+      );
 
+      if (!response.ok) {
+        throw new Error(
+          `GeoJSON request failed: ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      if (
+        !data ||
+        data.type !== "FeatureCollection"
+      ) {
+        throw new Error(
+          "Invalid GeoJSON FeatureCollection"
+        );
+      }
+
+      if (
+        !Array.isArray(data.features)
+      ) {
+        throw new Error(
+          "GeoJSON does not contain features"
+        );
+      }
+
+      console.log(
+        "Nepal GeoJSON loaded:",
+        data.features.length,
+        "features"
+      );
+
+      setGeoJsonData(data);
+    } catch (error) {
+      console.error(
+        "Unable to load Nepal GeoJSON:",
+        error
+      );
+
+      setGeoJsonData(null);
+      setGeoJsonError(true);
+    } finally {
+      setGeoJsonLoading(false);
+    }
+  }
 
   /* =======================================================
      LOAD DISASTER LIST
      ======================================================= */
 
-  const loadDisasterList = async (
-    shouldSelectLatest = true
-  ) => {
-
-    setListLoading(true)
+  async function loadDisasterList() {
+    setListLoading(true);
 
     try {
-
-      const data = await getDisasters()
+      const data = await getDisasters();
 
       const disasterList =
         Array.isArray(data)
           ? data
-          : []
+          : [];
 
-      setDisasters(disasterList)
+      setDisasters(disasterList);
 
       /*
-       * When Dashboard has not supplied a selected ID,
-       * automatically use the latest disaster.
+       * If Dashboard did not provide a disaster,
+       * automatically select the latest backend disaster.
+       *
+       * This changes the selected information,
+       * NOT the map location.
        */
+
       if (
-        shouldSelectLatest &&
         externalDisasterId == null
       ) {
-
-        const latestDisaster =
+        const latest =
           getLatestDisaster(
             disasterList
-          )
+          );
 
-        if (latestDisaster?.id) {
-
+        if (latest?.id != null) {
           setSelectedDisasterId(
-            Number(latestDisaster.id)
-          )
+            Number(latest.id)
+          );
         }
       }
-
-    } catch (loadError) {
-
+    } catch (error) {
       console.error(
         "Unable to load disaster list:",
-        loadError
-      )
+        error
+      );
 
-      setError(true)
-
+      /*
+       * The Nepal map continues to work even
+       * when the backend is unavailable.
+       */
     } finally {
-
-      setListLoading(false)
-
+      setListLoading(false);
     }
   }
 
-
   /* =======================================================
-     LOAD SELECTED IMPACT
+     LOAD SELECTED DISASTER IMPACT
      ======================================================= */
 
-  const loadImpact = async (
-    disasterId = selectedDisasterId
-  ) => {
-
-    if (!disasterId) {
-      setImpactData(null)
-      setLoading(false)
-      return
+  async function loadImpact(disasterId) {
+    if (
+      disasterId == null ||
+      disasterId === ""
+    ) {
+      setImpactData(null);
+      setImpactError(false);
+      setImpactLoading(false);
+      return;
     }
 
-    setLoading(true)
-    setError(false)
+    setImpactLoading(true);
+    setImpactError(false);
 
     try {
-
       const data =
         await getDisasterImpact(
           Number(disasterId)
-        )
+        );
 
-      setImpactData(data)
-
-    } catch (loadError) {
-
+      setImpactData(data);
+    } catch (error) {
       console.error(
         "Unable to load disaster impact:",
-        loadError
-      )
+        error
+      );
 
-      setImpactData(null)
-      setError(true)
-
+      setImpactData(null);
+      setImpactError(true);
     } finally {
-
-      setLoading(false)
-
+      setImpactLoading(false);
     }
   }
 
-
   /* =======================================================
-     INITIAL DISASTER LIST
+     INITIAL LOAD
      ======================================================= */
 
   useEffect(() => {
-
-    loadDisasterList(
-      externalDisasterId == null
-    )
-
-  }, [])
-
+    loadNepalGeoJSON();
+    loadDisasterList();
+  }, []);
 
   /* =======================================================
      SYNC WITH DASHBOARD
      ======================================================= */
 
   useEffect(() => {
+    if (externalDisasterId == null) {
+      return;
+    }
+
+    const newId =
+      Number(externalDisasterId);
 
     if (
-      externalDisasterId != null &&
-      Number(externalDisasterId) !==
-        Number(selectedDisasterId)
+      Number.isFinite(newId) &&
+      newId !== Number(selectedDisasterId)
     ) {
-
-      setSelectedDisasterId(
-        Number(externalDisasterId)
-      )
-
+      setSelectedDisasterId(newId);
     }
-
   }, [
     externalDisasterId,
-  ])
-
+  ]);
 
   /* =======================================================
-     LOAD IMPACT WHEN SELECTED DISASTER CHANGES
+     LOAD IMPACT WHEN SELECTION CHANGES
      ======================================================= */
 
   useEffect(() => {
-
-    if (selectedDisasterId != null) {
-      loadImpact(
-        selectedDisasterId
-      )
-    }
-
+    loadImpact(selectedDisasterId);
   }, [
     selectedDisasterId,
-  ])
-
+  ]);
 
   /* =======================================================
-     AUTOMATIC REFRESH
+     BACKEND REFRESH
+
+     Refreshes disaster information every 30 seconds.
+
+     IMPORTANT:
+     It never changes the map center.
      ======================================================= */
 
   useEffect(() => {
-
-    const refreshInterval =
+    const interval =
       setInterval(async () => {
-
         try {
-
           const data =
-            await getDisasters()
+            await getDisasters();
 
-          const updatedDisasters =
+          const updated =
             Array.isArray(data)
               ? data
-              : []
+              : [];
 
-          setDisasters(
-            updatedDisasters
-          )
-
+          setDisasters(updated);
 
           /*
-           * Find the newest disaster.
+           * Only automatically change the selected
+           * disaster when Dashboard isn't controlling it.
            */
-          const latestDisaster =
-            getLatestDisaster(
-              updatedDisasters
-            )
 
-          if (!latestDisaster?.id) {
-            return
-          }
-
-          const latestId =
-            Number(latestDisaster.id)
-
-
-          /*
-           * If Dashboard is not controlling
-           * the selection, use latest disaster.
-           */
           if (
             externalDisasterId == null
           ) {
+            const latest =
+              getLatestDisaster(
+                updated
+              );
 
-            setSelectedDisasterId(
-              (currentId) => {
+            if (latest?.id != null) {
+              const latestId =
+                Number(latest.id);
 
-                if (
-                  Number(currentId) !==
+              setSelectedDisasterId(
+                (current) =>
+                  Number(current) !==
                   latestId
-                ) {
-                  return latestId
-                }
-
-                return currentId
-              }
-            )
-
+                    ? latestId
+                    : current
+              );
+            }
           }
-
-        } catch (refreshError) {
-
+        } catch (error) {
           console.error(
-            "Unable to refresh disaster list:",
-            refreshError
-          )
-
+            "Disaster refresh failed:",
+            error
+          );
         }
-
-      }, 30000)
-
+      }, 30000);
 
     return () => {
-      clearInterval(
-        refreshInterval
-      )
-    }
-
+      clearInterval(interval);
+    };
   }, [
     externalDisasterId,
-  ])
-
+  ]);
 
   /* =======================================================
-     DERIVED MAP DATA
+     UNIQUE DISASTERS FOR DROPDOWN
      ======================================================= */
 
-  const polygonPositions =
-    parsePolygonWKT(
-      impactData?.impact_area
-    )
+  const visibleDisasters =
+    useMemo(() => {
+      const map =
+        new Map();
+
+      disasters.forEach(
+        (disaster) => {
+          if (
+            disaster &&
+            disaster.id != null
+          ) {
+            map.set(
+              String(disaster.id),
+              disaster
+            );
+          }
+        }
+      );
+
+      return Array.from(
+        map.values()
+      );
+    }, [
+      disasters,
+    ]);
+
+  /* =======================================================
+     SEVERITY
+     ======================================================= */
+
+  const severity =
+    Number(
+      impactData?.severity || 0
+    );
 
   const severityColor =
     getSeverityColor(
-      Number(
-        impactData?.severity || 0
-      )
-    )
-
+      severity
+    );
 
   /* =======================================================
-     LOADING
+     VALID BACKEND INCIDENT LOCATION
+
+     We intentionally do NOT use invalid coordinates.
      ======================================================= */
 
-  if (loading) {
+  const markerLatitude =
+    impactData?.latitude;
 
+  const markerLongitude =
+    impactData?.longitude;
+
+  const hasValidIncidentLocation =
+    isValidNepalCoordinate(
+      markerLatitude,
+      markerLongitude
+    );
+
+  /* =======================================================
+     LOADING SCREEN
+     ======================================================= */
+
+  if (geoJsonLoading) {
     return (
-
       <div className="flex h-full min-h-[380px] flex-col justify-between rounded-xl bg-[hsl(var(--surface-muted)/.55)] p-4">
-
         <div className="h-9 w-56 animate-pulse rounded-lg bg-[hsl(var(--line))]" />
 
         <div className="space-y-3">
-
           <div className="h-32 animate-pulse rounded-xl bg-[hsl(var(--line)/.7)]" />
 
           <div className="h-3 w-2/3 animate-pulse rounded bg-[hsl(var(--line))]" />
 
           <div className="h-3 w-1/2 animate-pulse rounded bg-[hsl(var(--line))]" />
-
         </div>
 
         <p className="mono text-[9px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
-          Syncing incident layer
+          Loading Nepal disaster zones...
         </p>
-
       </div>
-
-    )
-
+    );
   }
 
-
   /* =======================================================
-     ERROR
-     ======================================================= */
-
-  if (error || !impactData) {
-
-    return (
-
-      <div className="flex h-full min-h-[380px] flex-col items-center justify-center rounded-xl bg-[hsl(var(--surface-muted)/.5)] px-6 text-center">
-
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[hsl(var(--coral-soft))] text-[hsl(var(--coral))]">
-
-          <AlertTriangle size={21} />
-
-        </div>
-
-        <p className="mt-4 text-sm font-extrabold text-[hsl(var(--foreground))]">
-          Incident layer unavailable
-        </p>
-
-        <p className="mt-2 max-w-xs text-[11px] leading-5 text-[hsl(var(--ink-soft))]">
-          The operations service did not return a live impact record.
-        </p>
-
-        <button
-          type="button"
-          data-testid="button-retry-disaster-map"
-          onClick={() =>
-            loadImpact()
-          }
-          className="mt-5 flex items-center gap-2 rounded-lg border border-[hsl(var(--line))] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--foreground))] transition hover:border-[hsl(var(--teal)/.4)] hover:bg-[hsl(var(--teal-soft))]"
-        >
-
-          <RefreshCw size={13} />
-
-          Retry connection
-
-        </button>
-
-      </div>
-
-    )
-
-  }
-
-
-  /* =======================================================
-     UNIQUE VISIBLE DISASTERS
-     ======================================================= */
-
-  const visibleDisasters =
-    Array.from(
-
-      new Map(
-
-        disasters
-
-          .filter(
-            (disaster) =>
-              disaster.latitude != null &&
-              disaster.longitude != null
-          )
-
-          .map(
-            (disaster) => [
-
-              `${disaster.type}|${disaster.country}|${Number(
-                disaster.latitude
-              ).toFixed(3)}|${Number(
-                disaster.longitude
-              ).toFixed(3)}`,
-
-              disaster,
-
-            ]
-          )
-
-      ).values()
-
-    )
-
-
-  /* =======================================================
-     MAP UI
+     MAIN UI
      ======================================================= */
 
   return (
-
     <div className="space-y-3">
 
-      {/* MAP CONTROLS */}
+      {/* =================================================
+          HEADER + DROPDOWN
+          ================================================= */}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
         <div className="flex items-center gap-2 text-[10px] text-[hsl(var(--ink-soft))]">
-
           <SlidersHorizontal
             size={14}
             className="text-[hsl(var(--teal))]"
           />
 
           <span className="font-bold uppercase tracking-[.1em]">
-            Incident focus
+            Nepal Disaster Zones
           </span>
-
         </div>
-
 
         <select
           value={
             selectedDisasterId ?? ""
           }
           onChange={(event) => {
+            const value =
+              event.target.value;
 
-            const nextId =
-              Number(
-                event.target.value
-              )
-
-            if (
-              Number.isFinite(nextId) &&
-              nextId > 0
-            ) {
-
-              setSelectedDisasterId(
-                nextId
-              )
-
+            if (value === "") {
+              setSelectedDisasterId(null);
+              return;
             }
 
+            const nextId =
+              Number(value);
+
+            if (
+              Number.isFinite(nextId)
+            ) {
+              setSelectedDisasterId(
+                nextId
+              );
+            }
           }}
-          disabled={
-            listLoading ||
-            visibleDisasters.length === 0
-          }
+          disabled={listLoading}
           data-testid="select-disaster-focus"
-          className="w-full rounded-lg border border-[hsl(var(--line))] bg-[hsl(var(--surface))] px-3 py-2 text-[10px] font-bold text-[hsl(var(--foreground))] outline-none transition focus:border-[hsl(var(--teal))] sm:w-auto sm:min-w-[240px]"
+          className="w-full cursor-pointer rounded-lg border border-[hsl(var(--line))] bg-[hsl(var(--surface))] px-3 py-2 text-[10px] font-bold text-[hsl(var(--foreground))] outline-none transition focus:border-[hsl(var(--teal))] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[260px]"
         >
-
-          {visibleDisasters.length === 0 && (
-
-            <option
-              value={
-                selectedDisasterId ?? ""
-              }
-            >
-              Primary incident /{" "}
-              {selectedDisasterId ?? "—"}
-            </option>
-
-          )}
-
+          <option value="">
+            Select disaster
+          </option>
 
           {visibleDisasters.map(
             (disaster) => (
-
               <option
                 key={disaster.id}
                 value={disaster.id}
               >
-
-                {disaster.type} /{" "}
-                {disaster.country} /{" "}
+                {disaster.type ||
+                  disaster.disaster_type ||
+                  "Disaster"}{" "}
+                /{" "}
+                {disaster.country ||
+                  "Nepal"}{" "}
+                / ID{" "}
                 {disaster.id}
-
               </option>
-
             )
           )}
-
         </select>
-
       </div>
 
-
-      {/* MAP */}
+      {/* =================================================
+          MAP
+          ================================================= */}
 
       <div className="map-surface relative h-[350px] w-full overflow-hidden rounded-xl border border-[hsl(var(--line))] sm:h-[390px]">
 
         <MapContainer
-          center={[
-            17.34,
-            78.44,
-          ]}
-          zoom={10}
+          center={NEPAL_CENTER}
+          zoom={NEPAL_ZOOM}
+          minZoom={5}
+          maxZoom={15}
           className="h-full w-full"
-          scrollWheelZoom
+          scrollWheelZoom={true}
         >
 
-          <MapUpdater
-            latitude={
-              impactData.latitude
-            }
-            longitude={
-              impactData.longitude
-            }
-          />
-
-
+          {/* OpenStreetMap */}
           <TileLayer
             attribution="&copy; OpenStreetMap contributors"
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
+          {/* Fit to Nepal GeoJSON ONLY */}
+          <FitNepalMap
+            geoJsonData={
+              geoJsonData
+            }
+          />
 
-          {/* CURRENT DISASTER POINTER */}
-
-          <Marker
-            position={[
-              Number(
-                impactData.latitude
-              ),
-              Number(
-                impactData.longitude
-              ),
-            ]}
-            icon={incidentIcon}
-          >
-
-            <Popup>
-
-              <strong>
-                {impactData.disaster_type}
-              </strong>
-
-              <br />
-
-              Severity:{" "}
-              {impactData.severity}
-
-              <br />
-
-              Zone:{" "}
-              {impactData.zone_name ||
-                "Not assigned"}
-
-            </Popup>
-
-          </Marker>
-
-
-          {/* IMPACT AREA */}
-
-          {polygonPositions && (
-
-            <Polygon
-              positions={
-                polygonPositions
+          {/* Nepal disaster polygons */}
+          {geoJsonData && (
+            <GeoJSON
+              key="nepal-disaster-zones"
+              data={geoJsonData}
+              style={
+                disasterZoneStyle
               }
-              pathOptions={{
-                color: severityColor,
-                fillColor: severityColor,
-                fillOpacity: 0.2,
-                weight: 2.5,
-              }}
+              onEachFeature={
+                onEachDisasterZone
+              }
             />
-
           )}
 
+          {/* Backend incident marker */}
+          {hasValidIncidentLocation && (
+            <Marker
+              position={[
+                Number(markerLatitude),
+                Number(markerLongitude),
+              ]}
+              icon={incidentIcon}
+            >
+              <Popup>
+                <div style={{ minWidth: 180 }}>
+                  <strong>
+                    {impactData?.disaster_type ||
+                      impactData?.type ||
+                      "Active Disaster"}
+                  </strong>
+
+                  <br />
+
+                  Severity:{" "}
+                  {impactData?.severity ??
+                    "N/A"}
+
+                  <br />
+
+                  Zone:{" "}
+                  {impactData?.zone_name ||
+                    "Not assigned"}
+
+                  <br />
+
+                  Latitude:{" "}
+                  {Number(
+                    markerLatitude
+                  ).toFixed(4)}
+
+                  <br />
+
+                  Longitude:{" "}
+                  {Number(
+                    markerLongitude
+                  ).toFixed(4)}
+                </div>
+              </Popup>
+            </Marker>
+          )}
         </MapContainer>
 
-
-        {/* MAP STATUS */}
+        {/* =================================================
+            MAP STATUS
+            ================================================= */}
 
         <div className="absolute bottom-3 left-3 z-[400] flex items-center gap-2 rounded-lg border border-[hsl(var(--line))] bg-[hsl(var(--surface)/.9)] px-2.5 py-2 shadow-lg backdrop-blur">
 
           <span className="status-dot text-[hsl(var(--coral))]" />
 
           <span className="mono text-[9px] uppercase tracking-wider text-[hsl(var(--foreground))]">
-            Active perimeter
+            Nepal disaster layer active
           </span>
-
         </div>
+
+        {/* =================================================
+            GEOJSON ERROR
+            ================================================= */}
+
+        {geoJsonError && (
+          <div className="absolute right-3 top-3 z-[400] flex items-center gap-2 rounded-lg border border-[hsl(var(--line))] bg-[hsl(var(--surface)/.95)] px-3 py-2 shadow-lg">
+
+            <AlertTriangle
+              size={13}
+              className="text-[hsl(var(--coral))]"
+            />
+
+            <span className="text-[9px] font-bold uppercase tracking-wider">
+              Nepal layer unavailable
+            </span>
+
+            <button
+              type="button"
+              onClick={
+                loadNepalGeoJSON
+              }
+              className="rounded-md p-1 transition hover:bg-[hsl(var(--teal-soft))]"
+              title="Reload Nepal disaster zones"
+            >
+              <RefreshCw
+                size={12}
+              />
+            </button>
+          </div>
+        )}
+
+        {/* =================================================
+            IMPACT LOADING
+            ================================================= */}
+
+        {impactLoading && (
+          <div className="absolute right-3 bottom-3 z-[400] rounded-lg border border-[hsl(var(--line))] bg-[hsl(var(--surface)/.9)] px-3 py-2 shadow-lg backdrop-blur">
+            <span className="mono text-[8px] uppercase tracking-wider text-[hsl(var(--ink-soft))]">
+              Loading disaster data...
+            </span>
+          </div>
+        )}
 
       </div>
 
-
-      {/* LEGEND */}
+      {/* =================================================
+          LEGEND
+          ================================================= */}
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--ink-soft))]">
 
         <span className="flex items-center gap-2">
-
           <i className="h-2 w-2 rounded-full bg-[hsl(var(--teal))]" />
-
-          Low / monitor
-
+          Flood / Water
         </span>
 
         <span className="flex items-center gap-2">
-
           <i className="h-2 w-2 rounded-full bg-[hsl(var(--amber))]" />
-
-          Elevated / prepare
-
+          Fire / Other
         </span>
 
         <span className="flex items-center gap-2">
-
           <i className="h-2 w-2 rounded-full bg-[hsl(var(--coral))]" />
-
-          Critical / act
-
+          Landslide / Critical
         </span>
 
       </div>
 
-    </div>
+      {/* =================================================
+          STATUS
+          ================================================= */}
 
-  )
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+
+        <span className="mono text-[8px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
+          GeoJSON:{" "}
+          {geoJsonData
+            ? `${geoJsonData.features?.length || 0} zones loaded`
+            : "Unavailable"}
+        </span>
+
+        <span className="mono text-[8px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
+          Disaster API:{" "}
+          {impactLoading
+            ? "Loading"
+            : impactError
+            ? "Unavailable"
+            : impactData
+            ? "Connected"
+            : "No incident selected"}
+        </span>
+
+      </div>
+
+      {/* =================================================
+          SELECTED DISASTER INFORMATION
+          ================================================= */}
+
+      {impactData && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+
+          <div className="rounded-lg border border-[hsl(var(--line))] bg-[hsl(var(--surface-muted)/.45)] p-3">
+            <div className="mono text-[8px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
+              Disaster
+            </div>
+
+            <div className="mt-1 text-xs font-bold">
+              {impactData.disaster_type ||
+                impactData.type ||
+                "Unknown"}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[hsl(var(--line))] bg-[hsl(var(--surface-muted)/.45)] p-3">
+            <div className="mono text-[8px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
+              Severity
+            </div>
+
+            <div
+              className="mt-1 text-xs font-bold"
+              style={{
+                color: severityColor,
+              }}
+            >
+              {impactData.severity ??
+                "N/A"}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[hsl(var(--line))] bg-[hsl(var(--surface-muted)/.45)] p-3">
+            <div className="mono text-[8px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
+              Zone
+            </div>
+
+            <div className="mt-1 text-xs font-bold">
+              {impactData.zone_name ||
+                "Not assigned"}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[hsl(var(--line))] bg-[hsl(var(--surface-muted)/.45)] p-3">
+            <div className="mono text-[8px] uppercase tracking-wider text-[hsl(var(--ink-faint))]">
+              Location
+            </div>
+
+            <div className="mt-1 text-xs font-bold">
+              {hasValidIncidentLocation
+                ? "Nepal"
+                : "Map layer"}
+            </div>
+          </div>
+
+        </div>
+      )}
+
+    </div>
+  );
 }
 
-
-export default DisasterMap
+export default DisasterMap;
