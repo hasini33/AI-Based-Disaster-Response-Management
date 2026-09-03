@@ -151,48 +151,68 @@ function Dashboard() {
    *
    * The dashboard automatically focuses on 1601.
    */
-  const loadLatestDisaster = async () => {
-    try {
-      const disasters = await getDisasters()
 
-      if (!Array.isArray(disasters) || disasters.length === 0) {
-        return
-      }
+const loadLatestDisaster = async () => {
+  try {
+    const disasters = await getDisasters()
 
-      const latestDisaster = getLatestDisaster(disasters)
-
-      if (!latestDisaster?.id) {
-        return
-      }
-
-      const latestId = Number(latestDisaster.id)
-
-      setSelectedDisasterId((currentId) => {
-        if (currentId !== latestId) {
-          return latestId
-        }
-
-        return currentId
-      })
-
-      /*
-       * Keep the latest disaster in the URL.
-       */
-      const currentUrlId = searchParams.get("disasterId")
-
-      if (Number(currentUrlId) !== latestId) {
-        navigate(
-          `/dashboard?disasterId=${latestId}`,
-          { replace: true }
-        )
-      }
-    } catch (error) {
-      console.error(
-        "Unable to load latest disaster:",
-        error
-      )
+    if (!Array.isArray(disasters) || disasters.length === 0) {
+      return
     }
+
+    const latestDisaster = getLatestDisaster(disasters)
+
+    if (!latestDisaster?.id) {
+      return
+    }
+
+    const latestId = Number(latestDisaster.id)
+
+    /*
+     * IMPORTANT:
+     *
+     * If the user came from the Disasters page
+     * using Inspect, the URL already contains
+     * ?disasterId=...
+     *
+     * In that case DO NOT replace the selected
+     * disaster with the latest disaster.
+     */
+
+    const currentUrlId = searchParams.get("disasterId")
+
+    if (currentUrlId) {
+      const selectedId = Number(currentUrlId)
+
+      if (Number.isFinite(selectedId)) {
+        setSelectedDisasterId(selectedId)
+        return
+      }
+    }
+
+    /*
+     * No disaster was selected from another page.
+     *
+     * In this case Dashboard can automatically
+     * focus on the latest disaster.
+     */
+
+    setSelectedDisasterId(latestId)
+
+    navigate(
+      `/dashboard?disasterId=${latestId}`,
+      {
+        replace: true,
+      }
+    )
+
+  } catch (error) {
+    console.error(
+      "Unable to load latest disaster:",
+      error
+    )
   }
+}
 
 
   /*
@@ -206,17 +226,20 @@ function Dashboard() {
    * the latest ID changes and the map automatically
    * focuses on the new incident.
    */
-  useEffect(() => {
+
+useEffect(() => {
+  loadLatestDisaster()
+
+  const refreshInterval = setInterval(() => {
     loadLatestDisaster()
+  }, 30000)
 
-    const refreshInterval = setInterval(() => {
-      loadLatestDisaster()
-    }, 30000)
+  return () => {
+    clearInterval(refreshInterval)
+  }
+}, [])
 
-    return () => {
-      clearInterval(refreshInterval)
-    }
-  }, [])
+
 
 
   /*
