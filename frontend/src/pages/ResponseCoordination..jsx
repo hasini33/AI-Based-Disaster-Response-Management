@@ -25,7 +25,7 @@ import {
   generateMissions,
   updateMissionStatus,
 } from "../services/missionservice"
-
+import RouteMap from "../components/RouteMap/RouteMap"
 
 const MISSIONS_PER_PAGE = 2
 
@@ -39,14 +39,13 @@ function ResponseCoordination() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("All")
   const [selectedOperation, setSelectedOperation] = useState(null)
-
+  const [generating, setGenerating] = useState(false)
   const [operations, setOperations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-
-  const [generating, setGenerating] = useState(false)
   const [updatingMission, setUpdatingMission] = useState(null)
   const [optimizingRoutes, setOptimizingRoutes] = useState(false)
+
 
   // =========================================================
   // ROUTE OPTIMIZATION DATA
@@ -431,63 +430,59 @@ function ResponseCoordination() {
 
   async function handleGenerateMissions() {
 
-    try {
+  try {
 
-      setGenerating(true)
-      setOptimizingRoutes(true)
-      setError("")
+    setGenerating(true)
+    setOptimizingRoutes(true)
+    setError("")
 
-      // =======================================================
-      // STEP 1: OPTIMIZE VEHICLE ROUTES
-      // =======================================================
+    // ================================================
+    // STEP 1: OPTIMIZE ROUTES
+    // ================================================
 
-      const routeResult =
-        await optimizeRoutes()
+    const routeResult =
+      await optimizeRoutes()
 
-      console.log(
-        "Route optimization result:",
-        routeResult
-      )
+    console.log(
+      "Optimized route result:",
+      routeResult
+    )
 
-      // Save latest route optimization response
-      setRouteData(routeResult)
+    setRouteData(routeResult)
 
-      // =======================================================
-      // STEP 2: GENERATE MISSIONS
-      // =======================================================
+    // ================================================
+    // STEP 2: GENERATE MISSIONS
+    // ================================================
 
-      await generateMissions()
+    setOptimizingRoutes(false)
 
-      // =======================================================
-      // STEP 3: LOAD MISSIONS
-      //
-      // Pass routeResult directly because React state
-      // updates asynchronously.
-      // =======================================================
+    await generateMissions()
 
-      await loadMissions(
-        routeResult
-      )
+    // ================================================
+    // STEP 3: LOAD MISSIONS
+    // ================================================
 
-    } catch (err) {
+    await loadMissions(routeResult)
 
-      console.error(
-        "Route optimization / mission generation failed:",
-        err
-      )
+  } catch (err) {
 
-      setError(
-        err.message ||
-        "Failed to optimize routes and generate missions."
-      )
+    console.error(
+      "Route optimization failed:",
+      err
+    )
 
-    } finally {
+    setError(
+      err?.message ||
+      "Failed to optimize routes and generate missions."
+    )
 
-      setGenerating(false)
-      setOptimizingRoutes(false)
+  } finally {
 
-    }
+    setGenerating(false)
+    setOptimizingRoutes(false)
+
   }
+}
 
 
   // =========================================================
@@ -1471,7 +1466,44 @@ function ResponseCoordination() {
         </div>
 
       )}
+{/* =====================================================
+    OPTIMIZED ROUTE MAP
+===================================================== */}
 
+{routeData && (
+
+  <div className="mb-6">
+
+    <div className="mb-4">
+
+      <h2 className="
+        text-xl
+        font-bold
+        text-slate-900
+        dark:text-white
+      ">
+        Optimized Response Routes
+      </h2>
+
+      <p className="
+        text-sm
+        text-slate-500
+        dark:text-slate-400
+        mt-1
+      ">
+        Vehicle routes optimized using road accessibility,
+        priority and travel distance.
+      </p>
+
+    </div>
+
+    <RouteMap
+      routeData={routeData}
+    />
+
+  </div>
+
+)}
 
       {/* =====================================================
           MISSION CONTROL BOARD
