@@ -11,8 +11,20 @@ def create_resource(
     db: Session,
     resource: ResourceCreate
 ):
+    resource_name = resource.resource_name.strip()
+
+    # Prevent duplicate resources
+    existing = (
+        db.query(Resource)
+        .filter(Resource.resource_name == resource_name)
+        .first()
+    )
+
+    if existing:
+        return existing
+
     new_resource = Resource(
-        resource_name=resource.resource_name.strip(),
+        resource_name=resource_name,
         resource_type=resource.resource_type,
         latitude=resource.latitude,
         longitude=resource.longitude,
@@ -29,7 +41,6 @@ def create_resource(
     db.refresh(new_resource)
 
     return new_resource
-
 
 def get_all_resources(db: Session):
     return (

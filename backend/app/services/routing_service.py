@@ -8,6 +8,43 @@ from app.models.zone import Zone
 from app.models.road import Road
 
 
+# ==========================================================
+# CITY DEFINITIONS
+# ==========================================================
+
+CITY_REGIONS = {
+    "Hyderabad": {
+        "latitude": 17.385,
+        "longitude": 78.486,
+        "radius_km": 80,
+    },
+    "Mumbai": {
+        "latitude": 19.076,
+        "longitude": 72.877,
+        "radius_km": 80,
+    },
+    "Chennai": {
+        "latitude": 13.082,
+        "longitude": 80.270,
+        "radius_km": 80,
+    },
+    "Bhubaneswar": {
+        "latitude": 20.296,
+        "longitude": 85.824,
+        "radius_km": 80,
+    },
+    "Delhi": {
+        "latitude": 28.613,
+        "longitude": 77.209,
+        "radius_km": 80,
+    },
+}
+
+
+# ==========================================================
+# DISTANCE
+# ==========================================================
+
 def calculate_distance(
     lat1: float,
     lon1: float,
@@ -45,27 +82,56 @@ def calculate_distance(
     return earth_radius * c
 
 
-def find_nearest_depot(
+# ==========================================================
+# CITY DETECTION
+# ==========================================================
+
+def detect_city(
+    latitude: float,
+    longitude: float
+):
+    """
+    Determine the nearest supported city.
+
+    A point is assigned to a city only if it is
+    within that city's configured radius.
+    """
+
+    nearest_city = None
+    nearest_distance = None
+
+    for city_name, city in CITY_REGIONS.items():
+
+        distance = calculate_distance(
+            latitude,
+            longitude,
+            city["latitude"],
+            city["longitude"]
+        )
+
+        if distance <= city["radius_km"]:
+
+            if (
+                nearest_distance is None
+                or distance < nearest_distance
+            ):
+                nearest_distance = distance
+                nearest_city = city_name
+
+    return nearest_city
+
+
+# ==========================================================
+# ZONE COORDINATES
+# ==========================================================
+
+def get_zone_coordinates(
     db: Session,
     zone_id: int
 ):
     """
-    Find the nearest available valid depot.
-
-    This is kept for backward compatibility with
-    the original routing endpoint.
+    Get the centroid coordinates of a zone.
     """
-
-    zone = (
-        db.query(Zone)
-        .filter(
-            Zone.id == zone_id
-        )
-        .first()
-    )
-
-    if not zone:
-        return None
 
     coordinates = db.execute(
         text("""
@@ -83,10 +149,55 @@ def find_nearest_depot(
     if not coordinates:
         return None
 
-    zone_lat = coordinates[0]
-    zone_lon = coordinates[1]
+    return coordinates[0], coordinates[1]
 
-    # Only valid supply-related depots
+
+# ==========================================================
+# FIND NEAREST DEPOT
+# ==========================================================
+
+def find_nearest_depot(
+    db: Session,
+    zone_id: int
+):
+    """
+    Find the nearest available depot in the
+    same city as the affected zone.
+
+    Kept for backward compatibility with
+    the original routing endpoint.
+    """
+
+    zone = (
+        db.query(Zone)
+        .filter(
+            Zone.id == zone_id
+        )
+        .first()
+    )
+
+    if not zone:
+        return None
+
+    coordinates = get_zone_coordinates(
+        db,
+        zone_id
+    )
+
+    if not coordinates:
+        return None
+
+    zone_lat, zone_lon = coordinates
+
+    zone_city = detect_city(
+        zone_lat,
+        zone_lon
+    )
+
+    # --------------------------------------------------
+    # Find compatible depots
+    # --------------------------------------------------
+
     depots = (
         db.query(Depot)
         .filter(
@@ -101,13 +212,39 @@ def find_nearest_depot(
         .all()
     )
 
+    if zone_city:
+        city_depots = []
+
+        for depot in depots:
+
+            if (
+                depot.latitude is None
+                or depot.longitude is None
+            ):
+                continue
+
+            depot_city = detect_city(
+                depot.latitude,
+                depot.longitude
+            )
+
+            if depot_city == zone_city:
+                city_depots.append(depot)
+
+        depots = city_depots
+
     if not depots:
         return {
             "zone_id": zone.id,
             "zone_name": zone.zone_name,
-            "message": "No available depots found",
+            "city": zone_city,
+            "message": "No available same-city depots found",
             "route": None
         }
+
+    # --------------------------------------------------
+    # Find nearest depot
+    # --------------------------------------------------
 
     nearest_depot = None
     shortest_distance = None
@@ -138,6 +275,7 @@ def find_nearest_depot(
         return {
             "zone_id": zone.id,
             "zone_name": zone.zone_name,
+            "city": zone_city,
             "message": "No depot with valid coordinates",
             "route": None
         }
@@ -145,6 +283,7 @@ def find_nearest_depot(
     return {
         "zone_id": zone.id,
         "zone_name": zone.zone_name,
+        "city": zone_city,
 
         "destination": {
             "latitude": zone_lat,
@@ -167,11 +306,16 @@ def find_nearest_depot(
     }
 
 
+# ==========================================================
+# ROAD STATUS
+# ==========================================================
+
 def get_road_status(
     db: Session
 ):
     """
     Return currently open roads.
+
     Blocked roads are intentionally excluded.
     """
 
@@ -183,10 +327,19 @@ def get_road_status(
         .all()
     )
 
-    return [
-        {
+    result = []
+
+    for road in roads:
+
+        city = detect_city(
+            road.start_latitude,
+            road.start_longitude
+        )
+
+        result.append({
             "id": road.id,
             "name": road.road_name,
+            "city": city,
 
             "start": (
                 road.start_latitude,
@@ -202,11 +355,14 @@ def get_road_status(
 
             "travel_time_minutes":
                 road.travel_time_minutes
-        }
+        })
 
-        for road in roads
-    ]
+    return result
 
+
+# ==========================================================
+# OPTIMIZE ROUTE
+# ==========================================================
 
 def optimize_route(
     db: Session,
@@ -214,11 +370,12 @@ def optimize_route(
     resource_type: str = "all"
 ):
     """
-    Find the best available road route
-    for a specific resource type.
+    Find the best available road route for a
+    specific resource type.
 
-    Only available and compatible depots are considered.
-    Only open roads are considered.
+    IMPORTANT:
+    Depot and road candidates are restricted
+    to the same city as the affected zone.
     """
 
     # --------------------------------------------------
@@ -240,18 +397,10 @@ def optimize_route(
     # 2. Get zone coordinates
     # --------------------------------------------------
 
-    coordinates = db.execute(
-        text("""
-            SELECT
-                ST_Y(ST_Centroid(geometry)),
-                ST_X(ST_Centroid(geometry))
-            FROM zones
-            WHERE id = :zone_id
-        """),
-        {
-            "zone_id": zone_id
-        }
-    ).fetchone()
+    coordinates = get_zone_coordinates(
+        db,
+        zone_id
+    )
 
     if not coordinates:
         return {
@@ -261,11 +410,19 @@ def optimize_route(
             "route": None
         }
 
-    zone_lat = coordinates[0]
-    zone_lon = coordinates[1]
+    zone_lat, zone_lon = coordinates
 
     # --------------------------------------------------
-    # 3. Resource → Depot type mapping
+    # 3. Detect city
+    # --------------------------------------------------
+
+    zone_city = detect_city(
+        zone_lat,
+        zone_lon
+    )
+
+    # --------------------------------------------------
+    # 4. Resource → Depot type mapping
     # --------------------------------------------------
 
     allowed_types = {
@@ -310,7 +467,11 @@ def optimize_route(
         ]
     }
 
-    resource_key = resource_type.lower().strip()
+    resource_key = (
+        resource_type
+        .lower()
+        .strip()
+    )
 
     selected_types = allowed_types.get(
         resource_key
@@ -320,6 +481,7 @@ def optimize_route(
         return {
             "zone_id": zone.id,
             "zone_name": zone.zone_name,
+            "city": zone_city,
             "resource_type": resource_type,
             "message": (
                 f"Unsupported resource type: "
@@ -329,7 +491,7 @@ def optimize_route(
         }
 
     # --------------------------------------------------
-    # 4. Find compatible available depots
+    # 5. Find compatible available depots
     # --------------------------------------------------
 
     depots = (
@@ -343,20 +505,50 @@ def optimize_route(
         .all()
     )
 
+    # --------------------------------------------------
+    # IMPORTANT:
+    # Keep only depots from the same city
+    # --------------------------------------------------
+
+    if zone_city:
+
+        same_city_depots = []
+
+        for depot in depots:
+
+            if (
+                depot.latitude is None
+                or depot.longitude is None
+            ):
+                continue
+
+            depot_city = detect_city(
+                depot.latitude,
+                depot.longitude
+            )
+
+            if depot_city == zone_city:
+                same_city_depots.append(
+                    depot
+                )
+
+        depots = same_city_depots
+
     if not depots:
         return {
             "zone_id": zone.id,
             "zone_name": zone.zone_name,
+            "city": zone_city,
             "resource_type": resource_type,
             "message": (
-                "No available depot found "
-                "for this resource type"
+                "No available same-city depot "
+                "found for this resource type"
             ),
             "route": None
         }
 
     # --------------------------------------------------
-    # 5. Get open roads
+    # 6. Get open roads
     # --------------------------------------------------
 
     roads = (
@@ -367,17 +559,52 @@ def optimize_route(
         .all()
     )
 
+    # --------------------------------------------------
+    # IMPORTANT:
+    # Keep only roads belonging to the zone's city
+    # --------------------------------------------------
+
+    if zone_city:
+
+        same_city_roads = []
+
+        for road in roads:
+
+            start_city = detect_city(
+                road.start_latitude,
+                road.start_longitude
+            )
+
+            end_city = detect_city(
+                road.end_latitude,
+                road.end_longitude
+            )
+
+            if (
+                start_city == zone_city
+                and end_city == zone_city
+            ):
+                same_city_roads.append(
+                    road
+                )
+
+        roads = same_city_roads
+
     if not roads:
         return {
             "zone_id": zone.id,
             "zone_name": zone.zone_name,
+            "city": zone_city,
             "resource_type": resource_type,
-            "message": "No open roads available",
+            "message": (
+                "No open roads available "
+                "in this city"
+            ),
             "route": None
         }
 
     # --------------------------------------------------
-    # 6. Find roads reaching the zone
+    # 7. Find roads reaching the zone
     # --------------------------------------------------
 
     destination_roads = []
@@ -406,6 +633,7 @@ def optimize_route(
         return {
             "zone_id": zone.id,
             "zone_name": zone.zone_name,
+            "city": zone_city,
             "resource_type": resource_type,
             "message": (
                 "No open road reaches this zone"
@@ -414,7 +642,7 @@ def optimize_route(
         }
 
     # --------------------------------------------------
-    # 7. Find best depot + road combination
+    # 8. Find best depot + road combination
     # --------------------------------------------------
 
     best_route = None
@@ -458,20 +686,21 @@ def optimize_route(
                 }
 
     # --------------------------------------------------
-    # 8. No feasible route
+    # 9. No feasible route
     # --------------------------------------------------
 
     if not best_route:
         return {
             "zone_id": zone.id,
             "zone_name": zone.zone_name,
+            "city": zone_city,
             "resource_type": resource_type,
             "message": "No feasible route found",
             "route": None
         }
 
     # --------------------------------------------------
-    # 9. Build response
+    # 10. Build response
     # --------------------------------------------------
 
     depot = best_route["depot"]
@@ -480,6 +709,7 @@ def optimize_route(
     return {
         "zone_id": zone.id,
         "zone_name": zone.zone_name,
+        "city": zone_city,
 
         "resource_type": resource_type,
 

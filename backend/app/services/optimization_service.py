@@ -1,11 +1,16 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from ortools.linear_solver import pywraplp
 
 from app.models.zone import Zone
 from app.models.resource import Resource
+
 from app.services.demand_prediction_service import (
     predict_zone_demand
+)
+
+from app.services.routing_service import (
+    detect_city
 )
 
 
@@ -14,15 +19,23 @@ from app.services.demand_prediction_service import (
 # ============================================================
 
 RESOURCE_MAP = {
+    # Food
     "food_packets": "food_packets",
     "food": "food_packets",
+    "supply": "food_packets",
+    "relief": "food_packets",
+    "relief supply": "food_packets",
 
+    # Water
     "water_liters": "water_liters",
     "water": "water_liters",
 
+    # Medical
     "medical_kits": "medical_kits",
     "medical": "medical_kits",
+    "medical supply": "medical_kits",
 
+    # Shelter
     "shelter_capacity": "shelter_capacity",
     "shelter": "shelter_capacity",
 }
@@ -116,7 +129,7 @@ def optimize_resource_allocation(
 
     # ========================================================
     # STEP 2
-    # GET AI DEMAND FOR EVERY ZONE
+    # GET AI DEMAND + CITY FOR EVERY ZONE
     # ========================================================
 
     zone_demands = []
@@ -186,6 +199,45 @@ def optimize_resource_allocation(
                 standard_resource
             ] = value
 
+        # --------------------------------------------
+        # GET ZONE COORDINATES
+        # --------------------------------------------
+
+        zone_lat_lon = db.execute(
+            text("""
+                SELECT
+                    ST_Y(ST_Centroid(geometry)),
+                    ST_X(ST_Centroid(geometry))
+                FROM zones
+                WHERE id = :zone_id
+            """),
+            {
+                "zone_id": zone.id
+            }
+        ).fetchone()
+
+        if not zone_lat_lon:
+            continue
+
+        zone_latitude = zone_lat_lon[0]
+        zone_longitude = zone_lat_lon[1]
+
+        # --------------------------------------------
+        # DETECT CITY
+        # --------------------------------------------
+
+        zone_city = detect_city(
+            zone_latitude,
+            zone_longitude
+        )
+
+        if not zone_city:
+            continue
+
+        # --------------------------------------------
+        # PRIORITY
+        # --------------------------------------------
+
         priority = get_priority_details(
             zone.severity_score
         )
@@ -195,6 +247,8 @@ def optimize_resource_allocation(
             "zone_id": zone.id,
 
             "zone_name": zone.zone_name,
+
+            "city": zone_city,
 
             "severity": float(
                 zone.severity_score or 0
@@ -212,16 +266,6 @@ def optimize_resource_allocation(
     # STEP 3
     # GET AVAILABLE INVENTORY
     # ========================================================
-    #
-    # IMPORTANT:
-    # Status can be:
-    #
-    # Available
-    # available
-    #
-    # So we normalize it using LOWER().
-    #
-    # ========================================================
 
     resources = (
         db.query(Resource)
@@ -232,6 +276,10 @@ def optimize_resource_allocation(
         )
         .all()
     )
+
+    # ========================================================
+    # GLOBAL INVENTORY SUMMARY
+    # ========================================================
 
     available_resources = {
 
@@ -246,9 +294,10 @@ def optimize_resource_allocation(
     }
 
     # ========================================================
-    # STEP 4
-    # SUM INVENTORY BY RESOURCE TYPE
+    # CITY-WISE INVENTORY
     # ========================================================
+
+    available_resources_by_city = {}
 
     for resource in resources:
 
@@ -256,14 +305,24 @@ def optimize_resource_allocation(
             resource.resource_type
         )
 
-        # Ignore:
-        #
-        # Hospital
-        # Ambulance
-        # Relief Center
-        # etc.
-        #
         if not standard_type:
+            continue
+
+        # Resource must have coordinates
+        # so that its city can be determined.
+
+        if (
+            resource.latitude is None
+            or resource.longitude is None
+        ):
+            continue
+
+        resource_city = detect_city(
+            resource.latitude,
+            resource.longitude
+        )
+
+        if not resource_city:
             continue
 
         capacity = float(
@@ -275,12 +334,42 @@ def optimize_resource_allocation(
             0
         )
 
+        # --------------------------------------------
+        # GLOBAL TOTAL
+        # --------------------------------------------
+
         available_resources[
             standard_type
         ] += capacity
 
+        # --------------------------------------------
+        # CITY TOTAL
+        # --------------------------------------------
+
+        if resource_city not in available_resources_by_city:
+
+            available_resources_by_city[
+                resource_city
+            ] = {
+
+                "food_packets": 0.0,
+
+                "water_liters": 0.0,
+
+                "medical_kits": 0.0,
+
+                "shelter_capacity": 0.0
+
+            }
+
+        available_resources_by_city[
+            resource_city
+        ][
+            standard_type
+        ] += capacity
+
     # ========================================================
-    # STEP 5
+    # STEP 4
     # CREATE OR-TOOLS SOLVER
     # ========================================================
 
@@ -295,7 +384,7 @@ def optimize_resource_allocation(
         )
 
     # ========================================================
-    # STEP 6
+    # STEP 5
     # CREATE VARIABLES
     # ========================================================
     #
@@ -303,6 +392,11 @@ def optimize_resource_allocation(
     #
     # represents how much of a resource
     # is allocated to a zone.
+    #
+    # IMPORTANT:
+    #
+    # The upper bound uses inventory from
+    # the SAME CITY as the zone.
     #
     # ========================================================
 
@@ -314,21 +408,30 @@ def optimize_resource_allocation(
             "zone_id"
         ]
 
+        zone_city = zone_data[
+            "city"
+        ]
+
         allocation_variables[
             zone_id
         ] = {}
+
+        city_inventory = (
+            available_resources_by_city.get(
+                zone_city,
+                {}
+            )
+        )
 
         for resource_type, demand in (
             zone_data["demand"].items()
         ):
 
-            available = available_resources.get(
+            available = city_inventory.get(
                 resource_type,
                 0
             )
 
-            # If no inventory exists,
-            # allocation is forced to zero.
             upper_bound = min(
                 demand,
                 available
@@ -345,76 +448,72 @@ def optimize_resource_allocation(
             ][resource_type] = variable
 
     # ========================================================
-    # STEP 7
-    # RESOURCE CAPACITY CONSTRAINTS
+    # STEP 6
+    # CITY-WISE RESOURCE CAPACITY CONSTRAINTS
     # ========================================================
     #
     # Example:
     #
-    # Zone A Water
-    # + Zone B Water
-    # + Zone C Water
+    # Hyderabad Zone A Food
+    # + Hyderabad Zone B Food
     #
-    # <= 4300 liters
+    # <= Hyderabad Food Inventory
+    #
+    # Mumbai inventory is NOT included.
     #
     # ========================================================
 
-    for resource_type, total_available in (
-        available_resources.items()
+    for city, city_inventory in (
+        available_resources_by_city.items()
     ):
 
-        variables = []
+        for resource_type, total_available in (
+            city_inventory.items()
+        ):
 
-        for zone_data in zone_demands:
+            variables = []
 
-            zone_id = zone_data[
-                "zone_id"
-            ]
+            for zone_data in zone_demands:
 
-            variable = (
-                allocation_variables
-                .get(zone_id, {})
-                .get(resource_type)
-            )
+                if zone_data["city"] != city:
+                    continue
 
-            if variable is not None:
+                zone_id = zone_data[
+                    "zone_id"
+                ]
 
-                variables.append(
-                    variable
+                variable = (
+                    allocation_variables
+                    .get(zone_id, {})
+                    .get(resource_type)
                 )
 
-        if variables:
+                if variable is not None:
 
-            solver.Add(
-                solver.Sum(
-                    variables
+                    variables.append(
+                        variable
+                    )
+
+            if variables:
+
+                solver.Add(
+                    solver.Sum(
+                        variables
+                    )
+                    <= total_available
                 )
-                <= total_available
-            )
 
     # ========================================================
-    # STEP 8
+    # STEP 7
     # OBJECTIVE FUNCTION
     # ========================================================
     #
-    # We maximize weighted percentage coverage.
+    # Maximize weighted demand coverage.
     #
-    # This is better than simply maximizing raw quantities
-    # because Food, Water and Medical have different units.
-    #
-    # Example:
-    #
-    # Critical zone:
-    #     weight = 4
-    #
-    # High:
-    #     weight = 3
-    #
-    # Medium:
-    #     weight = 2
-    #
-    # Low:
-    #     weight = 1
+    # Critical = 4
+    # High     = 3
+    # Medium   = 2
+    # Low      = 1
     #
     # ========================================================
 
@@ -465,7 +564,7 @@ def optimize_resource_allocation(
         )
 
     # ========================================================
-    # STEP 9
+    # STEP 8
     # SOLVE
     # ========================================================
 
@@ -483,7 +582,7 @@ def optimize_resource_allocation(
         }
 
     # ========================================================
-    # STEP 10
+    # STEP 9
     # BUILD RESULT
     # ========================================================
 
@@ -491,8 +590,6 @@ def optimize_resource_allocation(
 
     total_required = 0.0
     total_allocated = 0.0
-
-    # Resource-level totals
 
     resource_summary = {
 
@@ -530,10 +627,44 @@ def optimize_resource_allocation(
 
     }
 
+    # ========================================================
+    # CITY-WISE SUMMARY
+    # ========================================================
+
+    city_resource_summary = {}
+
+    for city, inventory in (
+        available_resources_by_city.items()
+    ):
+
+        city_resource_summary[city] = {
+
+            resource_type: {
+                "available": round(
+                    value,
+                    2
+                ),
+                "required": 0.0,
+                "allocated": 0.0
+            }
+
+            for resource_type, value
+            in inventory.items()
+
+        }
+
+    # ========================================================
+    # BUILD ZONE ALLOCATION
+    # ========================================================
+
     for zone_data in zone_demands:
 
         zone_id = zone_data[
             "zone_id"
+        ]
+
+        zone_city = zone_data[
+            "city"
         ]
 
         zone_result = {
@@ -543,6 +674,8 @@ def optimize_resource_allocation(
             "zone_name": zone_data[
                 "zone_name"
             ],
+
+            "city": zone_city,
 
             "severity": zone_data[
                 "severity"
@@ -589,6 +722,10 @@ def optimize_resource_allocation(
 
             total_allocated += allocated
 
+            # --------------------------------------------
+            # GLOBAL SUMMARY
+            # --------------------------------------------
+
             resource_summary[
                 resource_type
             ][
@@ -600,6 +737,54 @@ def optimize_resource_allocation(
             ][
                 "allocated"
             ] += allocated
+
+            # --------------------------------------------
+            # CITY SUMMARY
+            # --------------------------------------------
+
+            if zone_city not in city_resource_summary:
+
+                city_resource_summary[
+                    zone_city
+                ] = {}
+
+            if resource_type not in (
+                city_resource_summary[
+                    zone_city
+                ]
+            ):
+
+                city_resource_summary[
+                    zone_city
+                ][resource_type] = {
+
+                    "available": 0.0,
+
+                    "required": 0.0,
+
+                    "allocated": 0.0
+
+                }
+
+            city_resource_summary[
+                zone_city
+            ][
+                resource_type
+            ][
+                "required"
+            ] += required
+
+            city_resource_summary[
+                zone_city
+            ][
+                resource_type
+            ][
+                "allocated"
+            ] += allocated
+
+            # --------------------------------------------
+            # ZONE RESULT
+            # --------------------------------------------
 
             zone_result[
                 "resources"
@@ -627,7 +812,7 @@ def optimize_resource_allocation(
         )
 
     # ========================================================
-    # STEP 11
+    # STEP 10
     # COVERAGE
     # ========================================================
 
@@ -643,8 +828,8 @@ def optimize_resource_allocation(
         overall_coverage = 0
 
     # ========================================================
-    # STEP 12
-    # ROUND RESOURCE SUMMARY
+    # STEP 11
+    # ROUND GLOBAL RESOURCE SUMMARY
     # ========================================================
 
     for resource_type in resource_summary:
@@ -689,6 +874,68 @@ def optimize_resource_allocation(
         )
 
     # ========================================================
+    # STEP 12
+    # ROUND CITY SUMMARY
+    # ========================================================
+
+    for city in city_resource_summary:
+
+        for resource_type in city_resource_summary[
+            city
+        ]:
+
+            city_resource_summary[
+                city
+            ][
+                resource_type
+            ][
+                "available"
+            ] = round(
+                city_resource_summary[
+                    city
+                ][
+                    resource_type
+                ][
+                    "available"
+                ],
+                2
+            )
+
+            city_resource_summary[
+                city
+            ][
+                resource_type
+            ][
+                "required"
+            ] = round(
+                city_resource_summary[
+                    city
+                ][
+                    resource_type
+                ][
+                    "required"
+                ],
+                2
+            )
+
+            city_resource_summary[
+                city
+            ][
+                resource_type
+            ][
+                "allocated"
+            ] = round(
+                city_resource_summary[
+                    city
+                ][
+                    resource_type
+                ][
+                    "allocated"
+                ],
+                2
+            )
+
+    # ========================================================
     # FINAL RESPONSE
     # ========================================================
 
@@ -716,6 +963,7 @@ def optimize_resource_allocation(
             2
         ),
 
+        # Global inventory
         "available_resources": {
             key: round(
                 value,
@@ -725,9 +973,15 @@ def optimize_resource_allocation(
             in available_resources.items()
         },
 
+        # Global summary
         "resource_summary":
             resource_summary,
 
+        # New city-wise summary
+        "city_resource_summary":
+            city_resource_summary,
+
+        # Zone allocations
         "allocation":
             allocation_result
 
