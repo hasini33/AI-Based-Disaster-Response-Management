@@ -80,7 +80,6 @@ async def get_gdacs_data():
     updated = 0
     skipped = 0
     errors = 0
-    zone_assignment_errors = 0
 
     try:
         # 2. Process each GDACS event
@@ -154,7 +153,6 @@ async def get_gdacs_data():
                 # Save the event before zone assignment
                 db.commit()
 
-                # 6. Assign the event to an operational zone
                 saved_disaster = (
                     db.query(Disaster)
                     .filter(
@@ -166,10 +164,7 @@ async def get_gdacs_data():
 
                 if saved_disaster and valid_coordinates:
                     try:
-                        assign_disaster_to_zone(
-                            db,
-                            saved_disaster.id
-                        )
+                        assign_disaster_to_zone(db, saved_disaster.id)
                     except Exception as exc:
                         db.rollback()
                         zone_assignment_errors += 1
@@ -191,7 +186,7 @@ async def get_gdacs_data():
             "duplicates_prevented": updated,
             "records_skipped": skipped,
             "processing_errors": errors,
-            "zone_assignment_errors": zone_assignment_errors
+            "zone_assignment": "Not performed during synchronization"
         }
 
     finally:
