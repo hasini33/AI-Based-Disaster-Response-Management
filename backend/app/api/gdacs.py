@@ -74,6 +74,20 @@ def parse_country(title):
     return match.group(1).strip() if match else None
 
 
+
+def limit_country_length(country):
+    """Keep country information within the database's 100-character limit."""
+    if not country:
+        return None
+
+    country = country.strip()
+
+    if len(country) > 100:
+        return "Multiple countries"
+
+    return country
+
+
 def normalize_rss_item(item):
     """Convert one GDACS RSS item into our Disaster model fields."""
 
@@ -128,11 +142,11 @@ def normalize_rss_item(item):
         "disaster_type": DISASTER_TYPES.get(
             event_type, event_type or "Unknown"
         ),
-        "country": (
-            get_xml_text(item, GDACS_NS, "country")
-            or parse_country(title)
+        "country": limit_country_length(
+        get_xml_text(item, GDACS_NS, "country")
+        or parse_country(title)
         ),
-        "alert_level": alert_level,
+            "alert_level": alert_level,
         "severity": severity,
         "latitude": latitude if valid_coordinates else None,
         "longitude": longitude if valid_coordinates else None,
